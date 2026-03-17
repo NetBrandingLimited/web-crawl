@@ -1,0 +1,29 @@
+# dependencies / builds
+node_modules/
+dist/
+.next/
+out/
+
+# logs / caches
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.turbo/
+.cache/
+
+# env / secrets
+.env
+.env.*
+*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Cursor / CodeSpring local artifacts
+.cursor/
+.codespring/config.json
+
