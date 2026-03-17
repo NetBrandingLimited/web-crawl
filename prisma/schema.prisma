@@ -1,0 +1,345 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Domain {
+  id              String    @id @default(uuid())
+  hostname        String    @db.VarChar(255)
+  scheme          String    @db.VarChar(10)
+  obeyRobots      Boolean   @default(true)
+  crawlDelayMs    Int?
+  robotsTxtEtag   String?   @db.VarChar(128)
+  robotsFetchedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  crawlJobs  CrawlJob[]
+  sitemaps   Sitemap[]
+  robotsTxt  RobotsTxt?
+  urls       Url[]
+  rateLimits RateLimit[]
+
+  @@unique([hostname, scheme])
+}
+
+model CrawlJob {
+  id       String @id @default(uuid())
+  domainId String
+  domain   Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  seedUrl String @db.VarChar(2048)
+  status  String @db.VarChar(32) // queued|running|completed|failed|canceled|canceling
+
+  // job options (subset; expand as needed)
+  maxDepth              Int     @default(3)
+  maxPages              Int     @default(5000)
+  maxDurationSeconds    Int     @default(3600)
+  rateLimitRpsPerHost   Decimal @default(2.0) @db.Decimal(6, 3)
+  maxConcurrencyPerHost Int     @default(2)
+  userAgent             String  @db.VarChar(255)
+  obeyRobots            Boolean @default(true)
+  includeSubdomains     Boolean @default(false)
+  sameSiteOnly          Boolean @default(true)
+  followRedirects       Boolean @default(true)
+  respectNofollow       Boolean @default(true)
+  stripTracking         Boolean @default(true)
+  allowedPathPatterns   String? // newline-separated regex (RE2) patterns
+  blockedPathPatterns   String? // newline-separated regex (RE2) patterns
+  parseContentTypes     String? // JSON array string
+
+  createdAt  DateTime  @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  queueEntries CrawlQueue[]
+  fetches      UrlFetch[]
+
+  @@index([domainId, createdAt])
+  @@index([status, createdAt])
+}
+
+model Sitemap {
+  id            String    @id @default(uuid())
+  domainId      String
+  domain        Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  url           String    @db.VarChar(2048)
+  discoveredAt  DateTime?
+  lastFetchedAt DateTime?
+  statusCode    Int?
+  compressed    Boolean?
+
+  @@index([domainId])
+}
+
+model RobotsTxt {
+  id                String    @id @default(uuid())
+  domainId          String    @unique
+  domain            Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  url               String    @db.VarChar(2048)
+  body              String
+  fetchedAt         DateTime?
+  statusCode        Int?
+  sitemapsExtracted Boolean   @default(false)
+}
+
+model Url {
+  id       String @id @default(uuid())
+  domainId String
+  domain   Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  urlHash String @unique @db.Char(40)
+  url     String @db.VarChar(2048)
+
+  canonicalUrlHash     String? @db.Char(40)
+  redirectFinalUrlHash String? @db.Char(40)
+
+  firstSeenAt   DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  lastCrawlAt   DateTime?
+  isCanonical   Boolean   @default(false)
+  robotsAllowed Boolean?
+
+  httpStatus     Int?
+  contentType    String? @db.VarChar(255)
+  contentLength  BigInt?
+  checksumSha256 String? @db.Char(64)
+
+  fetches UrlFetch[]
+
+  @@index([domainId])
+  @@index([domainId, httpStatus])
+}
+
+model CrawlQueue {
+  id    String   @id @default(uuid())
+  jobId String
+  job   CrawlJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  urlHash               String  @db.Char(40)
+  url                   String  @db.VarChar(2048)
+  depth                 Int
+  discoveredFromUrlHash String? @db.Char(40)
+
+  state       String    @db.VarChar(16) // pending|in_progress|done|skipped
+  priority    Int       @default(0)
+  enqueueAt   DateTime  @default(now())
+  availableAt DateTime?
+  lastError   String?   @db.VarChar(512)
+
+  @@unique([jobId, urlHash])
+  @@index([jobId, state, availableAt, priority])
+}
+
+model UrlFetch {
+  id    String   @id @default(uuid())
+  jobId String
+  job   CrawlJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  urlId String
+  url   Url    @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  requestedUrl String    @db.VarChar(2048)
+  requestedAt  DateTime  @default(now())
+  finishedAt   DateTime?
+  status       String    @db.VarChar(16)
+
+  httpStatus    Int?
+  contentType   String? @db.VarChar(255)
+  contentLength BigInt?
+
+  redirectChain       String?
+  redirectHops        Int?
+  canonicalFromHeader String? @db.VarChar(2048)
+  canonicalFromHtml   String? @db.VarChar(2048)
+
+  errorMessage String? @db.VarChar(512)
+  retryCount   Int     @default(0)
+
+  redirects Redirect[]
+  headers   HttpHeader[]
+
+  @@index([jobId, requestedAt])
+  @@index([urlId, requestedAt])
+}
+
+model Redirect {
+  id         String   @id @default(uuid())
+  fetchId    String
+  fetch      UrlFetch @relation(fields: [fetchId], references: [id], onDelete: Cascade)
+  hopOrder   Int
+  fromUrl    String   @db.VarChar(2048)
+  toUrl      String   @db.VarChar(2048)
+  statusCode Int
+
+  @@index([fetchId, hopOrder])
+}
+
+model HttpHeader {
+  id      String   @id @default(uuid())
+  fetchId String
+  fetch   UrlFetch @relation(fields: [fetchId], references: [id], onDelete: Cascade)
+  name    String   @db.VarChar(255)
+  value   String
+}
+
+model RateLimit {
+  id            String    @id @default(uuid())
+  domainId      String
+  domain        Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  rps           Decimal   @db.Decimal(6, 3)
+  burst         Int
+  lastRequestAt DateTime?
+
+  @@index([domainId])
+}
+
+// --- AI Mentions (DB PRD) ---
+
+model BrandSet {
+  id          String   @id @default(uuid())
+  name        String   @db.VarChar(200)
+  ownerUserId String
+  createdAt   DateTime @default(now())
+
+  variants BrandVariant[]
+  queries  AiQuery[]
+  mentions AiMention[]
+}
+
+model BrandVariant {
+  id         String   @id @default(uuid())
+  brandSetId String
+  brandSet   BrandSet @relation(fields: [brandSetId], references: [id], onDelete: Cascade)
+
+  variantText String   @db.VarChar(512)
+  variantType String   @db.VarChar(32)
+  domain      String?  @db.VarChar(255)
+  isRegex     Boolean  @default(false)
+  isPrimary   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  mentions AiMention[]
+
+  @@index([brandSetId])
+}
+
+model AiQuery {
+  id       String  @id @default(uuid())
+  keyword  String  @db.VarChar(512)
+  localeGl String? @db.VarChar(8)
+  localeHl String? @db.VarChar(8)
+  localeCr String? @db.VarChar(8)
+
+  brandSetId String
+  brandSet   BrandSet @relation(fields: [brandSetId], references: [id], onDelete: Cascade)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results AiResult[]
+
+  @@unique([keyword, localeGl, localeHl, localeCr, brandSetId])
+  @@index([keyword])
+}
+
+model AiRun {
+  id              String    @id @default(uuid())
+  source          String    @db.VarChar(32) // google_ao|perplexity|chatgpt
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  status          String    @db.VarChar(16) // queued|running|succeeded|failed|partial
+  error           String?
+  quotaSnapshot   Json?
+  requesterUserId String?
+  notes           String?
+
+  results AiResult[]
+
+  @@index([source, startedAt])
+  @@index([status])
+}
+
+model AiResult {
+  id      String  @id @default(uuid())
+  runId   String
+  run     AiRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  queryId String
+  query   AiQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
+
+  source                 String  @db.VarChar(32)
+  hasAiAnswer            Boolean
+  visibilityScore        Int
+  citationPositionBucket String  @db.VarChar(16)
+
+  snapshotRef    String? @db.VarChar(512)
+  snapshotMime   String? @db.VarChar(64)
+  rawAnswer      String?
+  answerLang     String? @db.VarChar(16)
+  extractionMeta Json?
+
+  createdAt DateTime @default(now())
+
+  mentions          AiMention[]
+  citations         AiCitation[]
+  competitorDomains AiCompetitorDomain[]
+
+  @@index([queryId, createdAt])
+  @@index([source])
+  @@index([visibilityScore])
+}
+
+model AiMention {
+  id         String        @id @default(uuid())
+  resultId   String
+  result     AiResult      @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  brandSetId String
+  brandSet   BrandSet      @relation(fields: [brandSetId], references: [id], onDelete: Cascade)
+  variantId  String?
+  variant    BrandVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  matchedText String   @db.VarChar(512)
+  isCited     Boolean
+  snippet     String?
+  charStart   Int?
+  charEnd     Int?
+  createdAt   DateTime @default(now())
+
+  @@index([resultId])
+  @@index([brandSetId, isCited])
+}
+
+model AiCitation {
+  id            String    @id @default(uuid())
+  resultId      String
+  result        AiResult  @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  url           String
+  normalizedUrl String?
+  domain        String?   @db.VarChar(255)
+  position      Int
+  isOurDomain   Boolean
+  httpStatus    Int?
+  fetchedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([resultId])
+  @@index([domain, resultId])
+  @@index([isOurDomain])
+}
+
+model AiCompetitorDomain {
+  id          String   @id @default(uuid())
+  resultId    String
+  result      AiResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  domain      String   @db.VarChar(255)
+  count       Int
+  isOurDomain Boolean
+  createdAt   DateTime @default(now())
+
+  @@unique([resultId, domain])
+  @@index([resultId, count])
+}
