@@ -1,2 +1,19 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Node / TypeScript
+node_modules
+dist
+.next
+out
+.npm-cache
+
+# Env / secrets
+.env
+.env.*
+*.local
+
+# CodeSpring / Cursor
+.codespring/**
+!.codespring/PRDs/**
+.cursor/**
