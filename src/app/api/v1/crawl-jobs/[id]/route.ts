@@ -30,6 +30,8 @@ export async function GET(_req: Request, ctx: RouteCtx) {
     prisma.crawlQueue.count({ where: { jobId: id, state: "skipped" } }),
   ]);
 
+  const failed = await prisma.urlFetch.count({ where: { jobId: id, status: "error" } });
+
   const fetched = done + skipped;
 
   return NextResponse.json({
@@ -40,7 +42,7 @@ export async function GET(_req: Request, ctx: RouteCtx) {
       in_progress: inProgress,
       fetched,
       succeeded: done,
-      failed: 0,
+      failed,
       disallowed: 0,
       from_sitemaps: 0,
       max_depth_reached: job.maxDepth,
