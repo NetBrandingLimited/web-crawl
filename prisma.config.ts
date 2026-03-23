@@ -2,7 +2,7 @@ import { defineConfig } from 'prisma/config'
 import { Pool } from 'pg'
 
 export default defineConfig({
-  earlyAccess: true,
+  
   schema: './prisma/schema.prisma',
   migrate: {
     async adapter() {
