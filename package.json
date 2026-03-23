@@ -10,7 +10,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "worker": "tsx scripts/crawl-worker.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate"  
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.5.0",
