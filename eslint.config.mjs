@@ -1,13 +1,11 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextConfig from 'eslint-config-next/core-web-vitals.js';
-import nextTs from "eslint-config-next/typescript";
+import nextTs from "eslint-config-next/typescript.js";
 
 const eslintConfig = defineConfig([
-  ...nextVitals,
+  ...nextConfig,
   ...nextTs,
-  // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
     "build/**",
