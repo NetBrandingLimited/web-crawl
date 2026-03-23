@@ -4,8 +4,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("postgresql://postgres:13pGMEddhaGpVIEQ@db.rzevyaunijdxsiflncpd.supabase.co:5432/postgres")
 }
+
 
 model Domain {
   id              String    @id @default(uuid())
