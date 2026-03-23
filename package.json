@@ -9,9 +9,9 @@
     "lint": "eslint",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "worker": "tsx scripts/crawl-worker.ts"
-    "postinstall": "prisma generate"  ← this is needed for Vercel!
-  },
+    "worker": "tsx scripts/crawl-worker.ts",
+    "postinstall": "prisma generate" 
+
   "dependencies": {
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
