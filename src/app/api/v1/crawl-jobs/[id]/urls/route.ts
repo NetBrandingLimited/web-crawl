@@ -28,9 +28,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit);
   const nextCursor = hasMore ? items[items.length - 1]?.id : null;
+  type QueueRow = (typeof items)[number];
 
   return NextResponse.json({
-    items: items.map((r) => ({
+    items: items.map((r: QueueRow) => ({
       id: r.id,
       job_id: jobId,
       original_url: r.url,
