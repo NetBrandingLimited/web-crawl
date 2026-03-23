@@ -6,7 +6,7 @@ export default defineConfig({
   datasource: {
     // Use a direct (non-pooler) URL for Prisma CLI/migrations.
     // Keep DATABASE_URL for the running app/worker (pooler is fine there).
-    url: process.env.DIRECT_URL ?? env("DATABASE_URL"),
+    url: process.env.DIRECT_URL ?? env("postgresql://postgres:13pGMEddhaGpVIEQ@db.rzevyaunijdxsiflncpd.supabase.co:5432/postgres"),
   },
 });
 
