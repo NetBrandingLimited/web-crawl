@@ -10,12 +10,13 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "worker": "tsx scripts/crawl-worker.ts"
+    "postinstall": "prisma generate"  ← this is needed for Vercel!
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "cheerio": "^1.2.0",
-    "next": "16.1.7",
+    "next": "15.x.x",
     "pg": "^8.20.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
