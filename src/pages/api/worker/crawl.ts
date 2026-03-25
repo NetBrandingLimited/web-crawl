@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import type { NextApiRequest, NextApiResponse } from "next";
 import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma";
 import { normalizeInputToUrl, sha1Hex } from "@/lib/crawl-url";
@@ -36,8 +36,12 @@ function normalizeUrl(raw: string, stripTracking = true): URL | null {
   }
 }
 
-export async function GET() {
-  // Pick up to 10 pending URLs from the queue
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ message: "Method not allowed" });
+  }
+
   const pending = await prisma.crawlQueue.findMany({
     where: {
       state: "pending",
@@ -49,7 +53,7 @@ export async function GET() {
   });
 
   if (pending.length === 0) {
-    return NextResponse.json({ message: "No pending URLs" });
+    return res.status(200).json({ message: "No pending URLs" });
   }
 
   const results: { url: string; status: number; ok: boolean; error?: string }[] = [];
@@ -111,11 +115,8 @@ export async function GET() {
           try {
             const href = $(el).attr("href")!;
             const abs = new URL(href, item.url);
-            // Same site only check
             if (item.job.sameSiteOnly && abs.hostname !== seedUrl.hostname) return;
-            // Only http/https
             if (!["http:", "https:"].includes(abs.protocol)) return;
-            // Strip hash
             abs.hash = "";
             discovered.push(abs.toString());
           } catch {
@@ -123,7 +124,6 @@ export async function GET() {
           }
         });
 
-        // Add new URLs to queue
         for (const newUrl of discovered) {
           const hash = sha1Hex(newUrl);
           const exists = await prisma.crawlQueue.findFirst({
@@ -146,7 +146,6 @@ export async function GET() {
         }
       }
 
-      // Mark as done
       await prisma.crawlQueue.update({
         where: { id: item.id },
         data: { state: "done" },
@@ -154,16 +153,14 @@ export async function GET() {
 
       results.push({ url: item.url, status, ok: true });
     } catch (err) {
-      // Mark as failed
       await prisma.crawlQueue.update({
         where: { id: item.id },
         data: { state: "failed" },
       });
-
       results.push({ url: item.url, ok: false, status: 0, error: String(err) });
     }
   }
 
-  return NextResponse.json({ processed: results.length, results });
+  return res.status(200).json({ processed: results.length, results });
 }
 
