@@ -1,0 +1,23 @@
+
+> web-crawl@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.1.7 (Turbopack)
+- Environments: .env
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 7.1s
+  Running TypeScript ...
+Failed to compile.
+
+./src/app/api/worker/crawl/route.ts:52:11
+Type error: Object literal may only specify known properties, and 'jobId_urlHash' does not exist in type 'UrlWhereUniqueInput'.
+
+  50 |       await prisma.url.upsert({
+  51 |         where: {
+> 52 |           jobId_urlHash: {
+     |           ^
+  53 |             jobId: item.jobId,
+  54 |             urlHash: item.urlHash,
+  55 |           },
+Next.js build worker exited with code: 1 and signal: null

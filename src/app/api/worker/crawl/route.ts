@@ -1,8 +1,40 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import * as cheerio from "cheerio";
+import { normalizeInputToUrl, sha1Hex } from "@/lib/crawl-url";
 
 const MAX_URLS_PER_RUN = 10;
+
+function stripTrackingParams(url: URL) {
+  const toDelete: string[] = [];
+  for (const [k] of url.searchParams) {
+    const key = k.toLowerCase();
+    if (key.startsWith("utm_")) toDelete.push(k);
+    if (key === "fbclid" || key === "gclid" || key === "ref") toDelete.push(k);
+  }
+  toDelete.forEach((k) => url.searchParams.delete(k));
+}
+
+function normalizeUrl(raw: string, stripTracking = true): URL | null {
+  try {
+    const u = normalizeInputToUrl(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+
+    u.hash = "";
+    u.username = "";
+    u.password = "";
+    if ((u.protocol === "http:" && u.port === "80") || (u.protocol === "https:" && u.port === "443")) {
+      u.port = "";
+    }
+    u.hostname = u.hostname.toLowerCase();
+    u.protocol = u.protocol.toLowerCase();
+
+    if (stripTracking) stripTrackingParams(u);
+    return u;
+  } catch {
+    return null;
+  }
+}
 
 export async function GET() {
   
@@ -45,30 +77,33 @@ export async function GET() {
       const finalUrl = response.url;
       const status = response.status;
       const contentType = response.headers.get("content-type") ?? "";
+      const contentLengthHeader = response.headers.get("content-length");
+      const contentLength = contentLengthHeader ? BigInt(contentLengthHeader) : null;
+
+      // Normalize the final URL (post-redirect) to keep `Url.urlHash` consistent.
+      const finalNormalized = normalizeUrl(finalUrl, item.job.stripTracking)?.toString() ?? finalUrl;
+      const urlHash = sha1Hex(finalNormalized);
 
       // Save the fetched URL
       await prisma.url.upsert({
-        where: {
-          jobId_urlHash: {
-            jobId: item.jobId,
-            urlHash: item.urlHash,
-          },
-        },
+        where: { urlHash },
         create: {
-          jobId: item.jobId,
-          urlHash: item.urlHash,
-          url: item.url,
-          finalUrl,
-          statusCode: status,
+          domainId: item.job.domainId,
+          urlHash,
+          url: finalNormalized,
+          httpStatus: status,
           contentType,
-          depth: item.depth,
-          fetchedAt: new Date(),
+          contentLength,
+          lastCrawlAt: new Date(),
+          robotsAllowed: true,
         },
         update: {
-          finalUrl,
-          statusCode: status,
           contentType,
-          fetchedAt: new Date(),
+          httpStatus: status,
+          contentLength,
+          lastCrawlAt: new Date(),
+          lastSeenAt: new Date(),
+          robotsAllowed: true,
         },
       });
 
