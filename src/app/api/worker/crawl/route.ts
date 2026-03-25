@@ -4,12 +4,12 @@ import * as cheerio from "cheerio";
 
 const MAX_URLS_PER_RUN = 10;
 
-export async function GET(req: Request) {
-  // Verify this is called by Vercel Cron
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET() {
+  
+  
+  
+  
+  
 
   // Pick up to 10 pending URLs from the queue
   const pending = await prisma.crawlQueue.findMany({
