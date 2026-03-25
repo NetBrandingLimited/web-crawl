@@ -37,6 +37,7 @@ function normalizeUrl(raw: string, stripTracking = true): URL | null {
 }
 
 export async function GET() {
+  // Worker endpoint: process up to `MAX_URLS_PER_RUN` pending crawl queue entries.
   
   
   
