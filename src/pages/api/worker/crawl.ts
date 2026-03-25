@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest, NextApiResponse } from "next"; 
 import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma";
 import { normalizeInputToUrl, sha1Hex } from "@/lib/crawl-url";
