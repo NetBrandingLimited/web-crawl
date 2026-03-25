@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@/lib/prisma";
 import * as cheerio from "cheerio";
 import { normalizeInputToUrl, sha1Hex } from "@/lib/crawl-url";
@@ -36,15 +36,12 @@ function normalizeUrl(raw: string, stripTracking = true): URL | null {
   }
 }
 
-export async function GET() {
-  // Worker endpoint: process up to `MAX_URLS_PER_RUN` pending crawl queue entries.
-  
-  
-  
-  
-  
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ message: "Method not allowed" });
+  }
 
-  // Pick up to 10 pending URLs from the queue
   const pending = await prisma.crawlQueue.findMany({
     where: {
       state: "pending",
@@ -56,13 +53,12 @@ export async function GET() {
   });
 
   if (pending.length === 0) {
-    return NextResponse.json({ message: "No pending URLs" });
+    return res.status(200).json({ message: "No pending URLs" });
   }
 
-  const results = [];
+  const results: { url: string; status: number; ok: boolean; error?: string }[] = [];
 
   for (const item of pending) {
-    // Mark as in_progress
     await prisma.crawlQueue.update({
       where: { id: item.id },
       data: { state: "in_progress" },
@@ -85,7 +81,6 @@ export async function GET() {
       const finalNormalized = normalizeUrl(finalUrl, item.job.stripTracking)?.toString() ?? finalUrl;
       const urlHash = sha1Hex(finalNormalized);
 
-      // Save the fetched URL
       await prisma.url.upsert({
         where: { urlHash },
         create: {
@@ -126,16 +121,17 @@ export async function GET() {
             // Strip hash
             abs.hash = "";
             discovered.push(abs.toString());
-          } catch {}
+          } catch {
+            // ignore malformed URLs
+          }
         });
 
-        // Add new URLs to queue
         for (const newUrl of discovered) {
-          const { sha1Hex } = await import("@/lib/crawl-url");
           const hash = sha1Hex(newUrl);
           const exists = await prisma.crawlQueue.findFirst({
             where: { jobId: item.jobId, urlHash: hash },
           });
+
           if (!exists) {
             await prisma.crawlQueue.create({
               data: {
@@ -152,7 +148,6 @@ export async function GET() {
         }
       }
 
-      // Mark as done
       await prisma.crawlQueue.update({
         where: { id: item.id },
         data: { state: "done" },
@@ -160,14 +155,14 @@ export async function GET() {
 
       results.push({ url: item.url, status, ok: true });
     } catch (err) {
-      // Mark as failed
       await prisma.crawlQueue.update({
         where: { id: item.id },
         data: { state: "failed" },
       });
-      results.push({ url: item.url, ok: false, error: String(err) });
+      results.push({ url: item.url, status: 0, ok: false, error: String(err) });
     }
   }
 
-  return NextResponse.json({ processed: results.length, results });
+  return res.status(200).json({ processed: results.length, results });
 }
+
