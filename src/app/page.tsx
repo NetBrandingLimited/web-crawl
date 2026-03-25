@@ -17,19 +17,10 @@ export default function Home() {
             >
               Start a crawl
             </Link>
-            <a
-              className="inline-flex h-11 items-center justify-center rounded-lg border border-zinc-200 bg-white px-5 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
-              href="/api/v1/crawl-jobs"
-              target="_blank"
-              rel="noreferrer"
-            >
-              API: crawl jobs
-            </a>
+            
           </div>
 
-          <div className="mt-8 text-sm text-zinc-500">
-            Next: connect Postgres, run Prisma migrate, then implement the crawler worker.
-          </div>
+          
         </div>
       </main>
     </div>
