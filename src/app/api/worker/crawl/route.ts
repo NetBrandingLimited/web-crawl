@@ -1,6 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
+import { prisma } from "@/lib/prisma";
 import { normalizeInputToUrl, sha1Hex } from "@/lib/crawl-url";
 
 const MAX_URLS_PER_RUN = 10;
@@ -36,12 +36,8 @@ function normalizeUrl(raw: string, stripTracking = true): URL | null {
   }
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return res.status(405).json({ message: "Method not allowed" });
-  }
-
+export async function GET() {
+  // Pick up to 10 pending URLs from the queue
   const pending = await prisma.crawlQueue.findMany({
     where: {
       state: "pending",
@@ -53,12 +49,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
 
   if (pending.length === 0) {
-    return res.status(200).json({ message: "No pending URLs" });
+    return NextResponse.json({ message: "No pending URLs" });
   }
 
   const results: { url: string; status: number; ok: boolean; error?: string }[] = [];
 
   for (const item of pending) {
+    // Mark as in_progress
     await prisma.crawlQueue.update({
       where: { id: item.id },
       data: { state: "in_progress" },
@@ -126,6 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         });
 
+        // Add new URLs to queue
         for (const newUrl of discovered) {
           const hash = sha1Hex(newUrl);
           const exists = await prisma.crawlQueue.findFirst({
@@ -148,6 +146,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
+      // Mark as done
       await prisma.crawlQueue.update({
         where: { id: item.id },
         data: { state: "done" },
@@ -155,14 +154,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       results.push({ url: item.url, status, ok: true });
     } catch (err) {
+      // Mark as failed
       await prisma.crawlQueue.update({
         where: { id: item.id },
         data: { state: "failed" },
       });
-      results.push({ url: item.url, status: 0, ok: false, error: String(err) });
+
+      results.push({ url: item.url, ok: false, status: 0, error: String(err) });
     }
   }
 
-  return res.status(200).json({ processed: results.length, results });
+  return NextResponse.json({ processed: results.length, results });
 }
 
