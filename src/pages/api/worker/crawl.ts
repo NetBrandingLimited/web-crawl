@@ -3,7 +3,19 @@ import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma";
 import { normalizeInputToUrl, sha1Hex } from "@/lib/crawl-url";
 
-const MAX_URLS_PER_RUN = 10;
+/** Vercel Hobby ~10s; keep defaults small. Override on Pro+ via env + vercel.json maxDuration. */
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  if (raw == null || raw === "") return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+const URLS_PER_RUN = parsePositiveInt(process.env.CRAWL_URLS_PER_RUN, 1);
+const FETCH_TIMEOUT_MS = Math.min(
+  120_000,
+  Math.max(1_000, parsePositiveInt(process.env.CRAWL_FETCH_TIMEOUT_MS, 8_000)),
+);
+const MAX_DISCOVERED_LINKS = parsePositiveInt(process.env.CRAWL_MAX_DISCOVERED_LINKS, 400);
 
 function stripTrackingParams(url: URL) {
   const toDelete: string[] = [];
@@ -48,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       availableAt: { lte: new Date() },
     },
     orderBy: { priority: "desc" },
-    take: MAX_URLS_PER_RUN,
+    take: URLS_PER_RUN,
     include: { job: true },
   });
 
@@ -69,7 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const response = await fetch(item.url, {
         headers: { "User-Agent": item.job.userAgent },
         redirect: item.job.followRedirects ? "follow" : "manual",
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
 
       const finalUrl = response.url;
@@ -124,22 +136,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         });
 
-        for (const newUrl of discovered) {
-          const hash = sha1Hex(newUrl);
-          // Race-safe: another tick or concurrent worker may insert the same (jobId, urlHash).
-          await prisma.crawlQueue
-            .create({
-              data: {
-                jobId: item.jobId,
-                urlHash: hash,
-                url: newUrl,
-                depth: item.depth + 1,
-                state: "pending",
-                priority: 0,
-                availableAt: new Date(),
-              },
-            })
-            .catch(() => null);
+        const seenHashes = new Set<string>();
+        const toEnqueue: { url: string; urlHash: string }[] = [];
+        for (const u of discovered) {
+          const h = sha1Hex(u);
+          if (seenHashes.has(h)) continue;
+          seenHashes.add(h);
+          toEnqueue.push({ url: u, urlHash: h });
+          if (toEnqueue.length >= MAX_DISCOVERED_LINKS) break;
+        }
+
+        const now = new Date();
+        if (toEnqueue.length > 0) {
+          await prisma.crawlQueue.createMany({
+            data: toEnqueue.map((row) => ({
+              jobId: item.jobId,
+              urlHash: row.urlHash,
+              url: row.url,
+              depth: item.depth + 1,
+              state: "pending",
+              priority: 0,
+              availableAt: now,
+            })),
+            skipDuplicates: true,
+          });
         }
       }
 
