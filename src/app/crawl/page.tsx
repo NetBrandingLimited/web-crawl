@@ -61,6 +61,7 @@ type CrawlSummaryResponse = {
     indexableUrls: number;
     securityIssues: number;
     contentQualityIssues: number;
+    brokenLinksWithSources: number;
   };
 };
 
@@ -201,7 +202,8 @@ export default function CrawlPage() {
       | "directives_audit"
       | "hreflang_audit"
       | "security_audit"
-      | "content_quality",
+      | "content_quality"
+      | "broken_links",
     format: "csv" | "excel",
   ) {
     if (!jobId) return;
@@ -422,6 +424,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("broken_links", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Broken Links CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportSitemapXml()}
                 disabled={!jobId}
                 type="button"
@@ -451,6 +461,7 @@ export default function CrawlPage() {
               <div>Indexable URLs: {reportSummary.indexableUrls}</div>
               <div>Security issues: {reportSummary.securityIssues}</div>
               <div>Content issues: {reportSummary.contentQualityIssues}</div>
+              <div>Broken links w/source: {reportSummary.brokenLinksWithSources}</div>
             </div>
           ) : null}
         </div>

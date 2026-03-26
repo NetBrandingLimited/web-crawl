@@ -235,6 +235,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
       if ((a.metaDesc?.length ?? 0) > 160) issues.push("meta_description_too_long");
       return issues.length > 0;
     }).length;
+    const brokenLinksWithSources = audits.filter(
+      (a) => (a.httpStatus ?? 0) >= 400 && queueRows.some((q) => q.urlHash === a.urlHash && !!q.discoveredFromUrlHash),
+    ).length;
 
     return NextResponse.json({
       jobId,
@@ -258,6 +261,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         indexableUrls,
         securityIssues,
         contentQualityIssues,
+        brokenLinksWithSources,
       },
     });
   }
@@ -704,6 +708,25 @@ export async function GET(req: Request, ctx: RouteCtx) {
         issues: issues.join("|"),
       };
     });
+  } else if (report === "broken_links") {
+    const queueByHash = new Map(queueRows.map((q) => [q.urlHash, q]));
+    const sourceUrlByHash = new Map(queueRows.map((q) => [q.urlHash, q.url]));
+    rows = audits
+      .filter((a) => (a.httpStatus ?? 0) >= 400)
+      .map((a) => {
+        const queue = queueByHash.get(a.urlHash);
+        const sourceHash = queue?.discoveredFromUrlHash ?? null;
+        const sourceUrl = sourceHash ? sourceUrlByHash.get(sourceHash) ?? null : null;
+        return {
+          broken_url: a.url,
+          http_status: a.httpStatus,
+          depth: a.depth,
+          source_url: sourceUrl,
+          source_url_hash: sourceHash,
+          title: a.title,
+          fetch_error: a.fetchError,
+        };
+      });
   } else if (report === "hreflang_audit") {
     rows = audits.map((a) => ({
       url: a.url,
