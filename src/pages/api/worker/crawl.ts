@@ -65,6 +65,8 @@ function cleanText(v: string | undefined | null): string | null {
 
 function isMissingAuditTableError(err: unknown): boolean {
   const msg = String(err);
+  // If Phase 1 audit storage isn't ready (migration not applied yet, schema mismatch, etc),
+  // we don't want the whole crawl worker to fail.
   return (
     msg.includes("CrawlPageAudit") &&
     (msg.includes("does not exist") ||
@@ -80,6 +82,8 @@ async function safeAuditWrite<T>(op: () => Promise<T>): Promise<T | null> {
   try {
     return await op();
   } catch (err) {
+    const msg = String(err);
+    if (msg.includes("CrawlPageAudit") || msg.includes("crawlPageAudit")) return null;
     if (isMissingAuditTableError(err)) return null;
     throw err;
   }
