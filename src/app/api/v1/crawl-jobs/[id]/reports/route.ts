@@ -158,6 +158,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         return true;
       }
     }).length;
+    const headingIssues = audits.filter(
+      (a) => a.h1Count === 0 || a.h1Count > 1 || a.h2Count === 0,
+    ).length;
 
     return NextResponse.json({
       jobId,
@@ -173,6 +176,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         duplicateMetaDescriptions,
         nearDuplicates,
         canonicalIssues,
+        headingIssues,
       },
     });
   }
@@ -440,6 +444,25 @@ export async function GET(req: Request, ctx: RouteCtx) {
         canonical_resolved: canonicalResolved,
         canonical_status: canonicalStatus,
         issue,
+      };
+    });
+  } else if (report === "heading_audit") {
+    rows = audits.map((a) => {
+      const issues: string[] = [];
+      if (a.h1Count === 0) issues.push("missing_h1");
+      if (a.h1Count > 1) issues.push("multiple_h1");
+      if (a.h2Count === 0) issues.push("missing_h2");
+      return {
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        h1_count: a.h1Count,
+        h2_count: a.h2Count,
+        title: a.title,
+        title_length: a.titleLength,
+        meta_description_length: a.metaDescLength,
+        heading_issue_count: issues.length,
+        heading_issues: issues.join("|"),
       };
     });
   } else {

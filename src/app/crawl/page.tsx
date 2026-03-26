@@ -53,6 +53,7 @@ type CrawlSummaryResponse = {
     duplicateMetaDescriptions: number;
     nearDuplicates: number;
     canonicalIssues: number;
+    headingIssues: number;
   };
 };
 
@@ -186,7 +187,8 @@ export default function CrawlPage() {
       | "duplicate_titles"
       | "duplicate_meta_descriptions"
       | "near_duplicates"
-      | "canonical_audit",
+      | "canonical_audit"
+      | "heading_audit",
     format: "csv" | "excel",
   ) {
     if (!jobId) return;
@@ -343,6 +345,14 @@ export default function CrawlPage() {
               >
                 Canonical Audit CSV
               </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("heading_audit", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                H1/H2 Audit CSV
+              </button>
             </div>
           </div>
           {reportSummary ? (
@@ -358,6 +368,7 @@ export default function CrawlPage() {
               <div>Duplicate meta desc: {reportSummary.duplicateMetaDescriptions}</div>
               <div>Near duplicates: {reportSummary.nearDuplicates}</div>
               <div>Canonical issues: {reportSummary.canonicalIssues}</div>
+              <div>Heading issues: {reportSummary.headingIssues}</div>
             </div>
           ) : null}
         </div>
