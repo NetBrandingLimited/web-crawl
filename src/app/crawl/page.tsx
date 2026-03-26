@@ -176,7 +176,13 @@ export default function CrawlPage() {
   }
 
   function exportReport(
-    report: "issues" | "pages" | "duplicates" | "redirects",
+    report:
+      | "issues"
+      | "pages"
+      | "duplicates"
+      | "redirects"
+      | "duplicate_titles"
+      | "duplicate_meta_descriptions",
     format: "csv" | "excel",
   ) {
     if (!jobId) return;
@@ -300,6 +306,22 @@ export default function CrawlPage() {
                 type="button"
               >
                 Redirects CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("duplicate_titles", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Duplicate Titles CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("duplicate_meta_descriptions", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Duplicate Meta CSV
               </button>
             </div>
           </div>

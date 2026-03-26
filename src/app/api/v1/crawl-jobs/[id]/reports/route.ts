@@ -267,6 +267,54 @@ export async function GET(req: Request, ctx: RouteCtx) {
       content_type: f.contentType,
       fetched_at: f.finishedAt?.toISOString() ?? null,
     }));
+  } else if (report === "duplicate_titles") {
+    const byTitle = new Map<string, typeof audits>();
+    for (const a of audits) {
+      if (!a.title) continue;
+      const key = normalizeDupKey(a.title);
+      if (!key) continue;
+      const arr = byTitle.get(key) ?? [];
+      arr.push(a);
+      byTitle.set(key, arr);
+    }
+    for (const [key, list] of byTitle) {
+      if (list.length < 2) continue;
+      for (const row of list) {
+        rows.push({
+          duplicate_title_key: key,
+          duplicate_group_size: list.length,
+          url: row.url,
+          depth: row.depth,
+          http_status: row.httpStatus,
+          title: row.title,
+          meta_description: row.metaDesc,
+        });
+      }
+    }
+  } else if (report === "duplicate_meta_descriptions") {
+    const byMeta = new Map<string, typeof audits>();
+    for (const a of audits) {
+      if (!a.metaDesc) continue;
+      const key = normalizeDupKey(a.metaDesc);
+      if (!key) continue;
+      const arr = byMeta.get(key) ?? [];
+      arr.push(a);
+      byMeta.set(key, arr);
+    }
+    for (const [key, list] of byMeta) {
+      if (list.length < 2) continue;
+      for (const row of list) {
+        rows.push({
+          duplicate_meta_description_key: key,
+          duplicate_group_size: list.length,
+          url: row.url,
+          depth: row.depth,
+          http_status: row.httpStatus,
+          title: row.title,
+          meta_description: row.metaDesc,
+        });
+      }
+    }
   } else {
     rows = audits
       .map((a) => {
