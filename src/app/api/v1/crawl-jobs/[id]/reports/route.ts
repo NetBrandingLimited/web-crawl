@@ -190,6 +190,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
         return true;
       }
     }).length;
+    const directivesIssues = audits.filter((a) => {
+      const robots = (a.robotsMeta ?? "").toLowerCase();
+      return robots.includes("noindex") || robots.includes("nofollow") || robots.includes("none");
+    }).length;
 
     return NextResponse.json({
       jobId,
@@ -208,6 +212,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         headingIssues,
         orphanPages,
         urlIssues,
+        directivesIssues,
       },
     });
   }
@@ -570,6 +575,29 @@ export async function GET(req: Request, ctx: RouteCtx) {
           issues: "invalid_url",
         };
       }
+    });
+  } else if (report === "directives_audit") {
+    rows = audits.map((a) => {
+      const robotsRaw = a.robotsMeta ?? "";
+      const robots = robotsRaw.toLowerCase();
+      const directives = robots
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+      const hasNoindex = directives.includes("noindex") || directives.includes("none");
+      const hasNofollow = directives.includes("nofollow") || directives.includes("none");
+      return {
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        robots_meta: robotsRaw || null,
+        directives: directives.join("|"),
+        has_noindex: hasNoindex,
+        has_nofollow: hasNofollow,
+        is_indexable_candidate:
+          !hasNoindex && (a.httpStatus == null || (a.httpStatus >= 200 && a.httpStatus < 300)),
+        issue_count: Number(hasNoindex) + Number(hasNofollow),
+      };
     });
   } else {
     rows = audits
