@@ -145,6 +145,19 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     const nearDuplicates = nearDupUrlHashes.size;
+    const canonicalIssues = audits.filter((a) => {
+      if (!a.canonicalUrl) return true;
+      try {
+        const page = new URL(a.url);
+        const canonical = new URL(a.canonicalUrl, a.url);
+        // Same URL except trailing slash differences are acceptable.
+        const normalize = (u: URL) =>
+          `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
+        return normalize(page) !== normalize(canonical);
+      } catch {
+        return true;
+      }
+    }).length;
 
     return NextResponse.json({
       jobId,
@@ -159,6 +172,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         duplicateTitles,
         duplicateMetaDescriptions,
         nearDuplicates,
+        canonicalIssues,
       },
     });
   }
@@ -392,6 +406,42 @@ export async function GET(req: Request, ctx: RouteCtx) {
         });
       }
     }
+  } else if (report === "canonical_audit") {
+    rows = audits.map((a) => {
+      let canonicalStatus: "missing" | "self" | "non_self" | "invalid" = "missing";
+      let canonicalResolved: string | null = null;
+      let issue: string | null = "missing_canonical";
+
+      if (a.canonicalUrl) {
+        try {
+          const page = new URL(a.url);
+          const canonical = new URL(a.canonicalUrl, a.url);
+          canonicalResolved = canonical.toString();
+          const normalize = (u: URL) =>
+            `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
+          if (normalize(page) === normalize(canonical)) {
+            canonicalStatus = "self";
+            issue = null;
+          } else {
+            canonicalStatus = "non_self";
+            issue = "canonical_points_elsewhere";
+          }
+        } catch {
+          canonicalStatus = "invalid";
+          issue = "canonical_invalid_url";
+        }
+      }
+
+      return {
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        canonical_raw: a.canonicalUrl,
+        canonical_resolved: canonicalResolved,
+        canonical_status: canonicalStatus,
+        issue,
+      };
+    });
   } else {
     rows = audits
       .map((a) => {
