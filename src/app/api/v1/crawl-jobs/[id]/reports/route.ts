@@ -133,6 +133,30 @@ export async function GET(req: Request, ctx: RouteCtx) {
         });
       }
     }
+  } else if (report === "redirects") {
+    const fetches = await prisma.urlFetch.findMany({
+      where: { jobId },
+      orderBy: { requestedAt: "asc" },
+      select: {
+        requestedUrl: true,
+        httpStatus: true,
+        redirectHops: true,
+        redirectChain: true,
+        contentType: true,
+        finishedAt: true,
+        url: { select: { url: true } },
+      },
+    });
+
+    rows = fetches.map((f) => ({
+      requested_url: f.requestedUrl,
+      final_url: f.url?.url ?? null,
+      http_status: f.httpStatus,
+      redirect_hops: f.redirectHops,
+      redirect_chain: f.redirectChain,
+      content_type: f.contentType,
+      fetched_at: f.finishedAt?.toISOString() ?? null,
+    }));
   } else {
     rows = audits
       .map((a) => {

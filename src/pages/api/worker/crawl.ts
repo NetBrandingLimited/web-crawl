@@ -63,6 +63,59 @@ function cleanText(v: string | undefined | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+type RedirectHop = { url: string; status: number };
+
+async function fetchWithRedirects(
+  url: string,
+  userAgent: string,
+  maxHops = 10,
+  timeoutMs = 30_000,
+): Promise<{
+  finalUrl: string;
+  status: number;
+  headers: Headers;
+  body: Buffer | null;
+  hops: RedirectHop[];
+}> {
+  const hops: RedirectHop[] = [];
+  let current = url;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  try {
+    for (let hop = 0; hop <= maxHops; hop++) {
+      const res = await fetch(current, {
+        redirect: "manual",
+        headers: { "user-agent": userAgent, accept: "text/html,application/xhtml+xml,*/*;q=0.8" },
+        signal: ctrl.signal,
+      });
+
+      const status = res.status;
+      const headers = res.headers;
+
+      if (status >= 300 && status < 400) {
+        const loc = headers.get("location");
+        hops.push({ url: current, status });
+
+        if (!loc) return { finalUrl: current, status, headers, body: null, hops };
+
+        current = new URL(loc, current).toString();
+        continue;
+      }
+
+      const ab = await res.arrayBuffer().catch(() => null);
+      const body = ab ? Buffer.from(ab) : null;
+      return { finalUrl: current, status, headers, body, hops };
+    }
+
+    // Exceeded max hops; return last URL without a valid body.
+    return { finalUrl: current, status: 310, headers: new Headers(), body: null, hops };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function isMissingAuditTableError(err: unknown): boolean {
   const msg = String(err);
   // If Phase 1 audit storage isn't ready (migration not applied yet, schema mismatch, etc),
@@ -132,23 +185,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     try {
-      const response = await fetch(item.url, {
-        headers: { "User-Agent": item.job.userAgent },
-        redirect: item.job.followRedirects ? "follow" : "manual",
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
+      const requestedNormalized = normalizeUrl(item.url, item.job.stripTracking)?.toString() ?? item.url;
+      const fetchStartedAt = new Date();
+      const result = await fetchWithRedirects(
+        requestedNormalized,
+        item.job.userAgent,
+        item.job.followRedirects ? 10 : 0,
+        FETCH_TIMEOUT_MS,
+      );
 
-      const finalUrl = response.url;
-      const status = response.status;
-      const contentType = response.headers.get("content-type") ?? "";
-      const contentLengthHeader = response.headers.get("content-length");
-      const contentLength = contentLengthHeader ? BigInt(contentLengthHeader) : null;
+      const finalUrl = result.finalUrl;
+      const status = result.status;
+      const contentType = result.headers.get("content-type") ?? "";
+      const contentLengthHeader = result.headers.get("content-length");
+      const contentLength = contentLengthHeader
+        ? BigInt(contentLengthHeader)
+        : result.body
+          ? BigInt(result.body.length)
+          : null;
 
       // Normalize the final URL (post-redirect) to keep `Url.urlHash` consistent.
       const finalNormalized = normalizeUrl(finalUrl, item.job.stripTracking)?.toString() ?? finalUrl;
       const urlHash = sha1Hex(finalNormalized);
 
-      await prisma.url.upsert({
+      const urlRow = await prisma.url.upsert({
         where: { urlHash },
         create: {
           domainId: item.job.domainId,
@@ -168,7 +228,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           lastSeenAt: new Date(),
           robotsAllowed: true,
         },
+        select: { id: true },
       });
+
+      // Persist redirect chain + fetch metadata for reports.
+      const fetchRow = await prisma.urlFetch.create({
+        data: {
+          jobId: item.jobId,
+          urlId: urlRow.id,
+          requestedUrl: requestedNormalized,
+          requestedAt: fetchStartedAt,
+          finishedAt: new Date(),
+          status: "success",
+          httpStatus: status || null,
+          contentType,
+          contentLength,
+          redirectChain: result.hops.length ? JSON.stringify(result.hops) : null,
+          redirectHops: result.hops.length || null,
+        },
+        select: { id: true },
+      });
+
+      if (result.hops.length) {
+        await prisma.redirect.createMany({
+          data: result.hops.map((h, idx) => ({
+            fetchId: fetchRow.id,
+            hopOrder: idx,
+            fromUrl: h.url,
+            toUrl: idx < result.hops.length - 1 ? result.hops[idx + 1].url : finalNormalized,
+            statusCode: h.status,
+          })),
+        });
+      }
 
       await safeAuditWrite(() =>
         prisma.crawlPageAudit.upsert({
@@ -194,7 +285,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Parse HTML and discover new URLs
       if (contentType.includes("text/html") && item.depth < item.job.maxDepth) {
-        const html = await response.text();
+        const html = result.body ? result.body.toString("utf8") : "";
         const $ = cheerio.load(html);
         const seedUrl = new URL(item.job.seedUrl);
         const discovered: string[] = [];
