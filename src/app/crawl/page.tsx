@@ -3,6 +3,10 @@
 import { useMemo, useState } from "react";
 
 const WORKER_STEPS_CAP = 4000;
+const DEFAULT_MAX_DEPTH = 10;
+// Keep this close to the "about 500 URLs" target so the crawl doesn't explode.
+const DEFAULT_MAX_PAGES = 600;
+const URLS_TABLE_LIMIT = 500;
 
 type CrawlJobCreateResponse = {
   id: string;
@@ -120,7 +124,11 @@ export default function CrawlPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           domain,
-          options: { max_depth: 3, max_pages: 5000, rate_limit_rps_per_host: 2 },
+          options: {
+            max_depth: DEFAULT_MAX_DEPTH,
+            max_pages: DEFAULT_MAX_PAGES,
+            rate_limit_rps_per_host: 2,
+          },
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -159,7 +167,7 @@ export default function CrawlPage() {
   async function loadUrls(id?: string) {
     const effectiveId = id ?? jobId;
     if (!effectiveId) return;
-    const res = await fetch(`/api/v1/crawl-jobs/${effectiveId}/urls?limit=50`, { cache: "no-store" });
+    const res = await fetch(`/api/v1/crawl-jobs/${effectiveId}/urls?limit=${URLS_TABLE_LIMIT}`, { cache: "no-store" });
     if (!res.ok) return;
     const json = (await res.json()) as CrawlUrlsResponse;
     setUrls(json.items);
@@ -344,4 +352,5 @@ export default function CrawlPage() {
     </div>
   );
 }
+
 
