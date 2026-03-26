@@ -58,9 +58,40 @@ model CrawlJob {
 
   queueEntries CrawlQueue[]
   fetches      UrlFetch[]
+  audits       CrawlPageAudit[]
 
   @@index([domainId, createdAt])
   @@index([status, createdAt])
+}
+
+model CrawlPageAudit {
+  id    String   @id @default(uuid())
+  jobId String
+  job   CrawlJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  urlHash String @db.Char(40)
+  url     String @db.VarChar(2048)
+  depth   Int
+
+  httpStatus    Int?
+  contentType   String?  @db.VarChar(255)
+  title         String?
+  titleLength   Int?
+  metaDesc      String?
+  metaDescLength Int?
+  h1Count       Int      @default(0)
+  h2Count       Int      @default(0)
+  canonicalUrl  String?  @db.VarChar(2048)
+  robotsMeta    String?  @db.VarChar(512)
+  hreflangCount Int      @default(0)
+  linksOutCount Int      @default(0)
+  wordCount     Int      @default(0)
+  contentHash   String?  @db.Char(40)
+  fetchedAt     DateTime @default(now())
+  fetchError    String?  @db.VarChar(512)
+
+  @@unique([jobId, urlHash])
+  @@index([jobId, httpStatus])
 }
 
 model Sitemap {

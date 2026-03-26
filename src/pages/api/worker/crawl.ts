@@ -57,6 +57,12 @@ function normalizeUrl(raw: string, stripTracking = true): URL | null {
   }
 }
 
+function cleanText(v: string | undefined | null): string | null {
+  if (!v) return null;
+  const normalized = v.replace(/\s+/g, " ").trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -137,6 +143,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
 
+      await prisma.crawlPageAudit.upsert({
+        where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
+        create: {
+          jobId: item.jobId,
+          urlHash,
+          url: finalNormalized,
+          depth: item.depth,
+          httpStatus: status,
+          contentType,
+        },
+        update: {
+          url: finalNormalized,
+          depth: item.depth,
+          httpStatus: status,
+          contentType,
+          fetchError: null,
+          fetchedAt: new Date(),
+        },
+      });
+
       // Parse HTML and discover new URLs
       if (contentType.includes("text/html") && item.depth < item.job.maxDepth) {
         const html = await response.text();
@@ -187,6 +213,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             skipDuplicates: true,
           });
         }
+
+        const title = cleanText($("head > title").first().text());
+        const metaDesc = cleanText($("meta[name='description']").attr("content"));
+        const canonicalUrl = cleanText($("link[rel='canonical']").attr("href"));
+        const robotsMeta = cleanText($("meta[name='robots']").attr("content"));
+        const h1Count = $("h1").length;
+        const h2Count = $("h2").length;
+        const hreflangCount = $("link[rel='alternate'][hreflang]").length;
+        const linksOutCount = $("a[href]").length;
+        const bodyText = cleanText($("body").text()) ?? "";
+        const wordCount = bodyText.length === 0 ? 0 : bodyText.split(" ").length;
+        const contentHash = bodyText.length > 0 ? sha1Hex(bodyText.toLowerCase()) : null;
+
+        await prisma.crawlPageAudit.update({
+          where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
+          data: {
+            title,
+            titleLength: title?.length ?? null,
+            metaDesc,
+            metaDescLength: metaDesc?.length ?? null,
+            h1Count,
+            h2Count,
+            canonicalUrl,
+            robotsMeta,
+            hreflangCount,
+            linksOutCount,
+            wordCount,
+            contentHash,
+            fetchedAt: new Date(),
+          },
+        });
       }
 
       await prisma.crawlQueue.update({
@@ -199,6 +256,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await prisma.crawlQueue.update({
         where: { id: item.id },
         data: { state: "failed" },
+      });
+      await prisma.crawlPageAudit.upsert({
+        where: { jobId_urlHash: { jobId: item.jobId, urlHash: item.urlHash } },
+        create: {
+          jobId: item.jobId,
+          urlHash: item.urlHash,
+          url: item.url,
+          depth: item.depth,
+          fetchError: String(err).slice(0, 500),
+          fetchedAt: new Date(),
+        },
+        update: {
+          url: item.url,
+          depth: item.depth,
+          fetchError: String(err).slice(0, 500),
+          fetchedAt: new Date(),
+        },
       });
       results.push({ url: item.url, ok: false, status: 0, error: String(err) });
     }

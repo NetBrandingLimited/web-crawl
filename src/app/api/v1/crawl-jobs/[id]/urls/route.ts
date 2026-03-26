@@ -30,6 +30,20 @@ export async function GET(req: Request, ctx: RouteCtx) {
   const nextCursor = hasMore ? items[items.length - 1]?.id : null;
   type QueueRow = (typeof items)[number];
 
+  const audits = await prisma.crawlPageAudit.findMany({
+    where: { jobId, urlHash: { in: items.map((i) => i.urlHash) } },
+    select: {
+      urlHash: true,
+      httpStatus: true,
+      contentType: true,
+      title: true,
+      canonicalUrl: true,
+      linksOutCount: true,
+      fetchError: true,
+    },
+  });
+  const auditsByHash = new Map(audits.map((a) => [a.urlHash, a]));
+
   return NextResponse.json({
     items: items.map((r: QueueRow) => ({
       id: r.id,
@@ -38,21 +52,22 @@ export async function GET(req: Request, ctx: RouteCtx) {
       normalized_url: r.url,
       discovered_from: [],
       crawl_depth: r.depth,
-      http_status: null,
-      content_type: null,
+      http_status: auditsByHash.get(r.urlHash)?.httpStatus ?? null,
+      content_type: auditsByHash.get(r.urlHash)?.contentType ?? null,
       content_length: null,
       redirect_chain: [],
       final_url: null,
-      canonical_url: null,
+      canonical_url: auditsByHash.get(r.urlHash)?.canonicalUrl ?? null,
       canonical_source: null,
       from_sitemap: false,
       robots_applied: true,
       disallowed: r.state === "skipped",
       error_code: null,
-      error_message: null,
+      error_message: auditsByHash.get(r.urlHash)?.fetchError ?? null,
       fetch_started_at: null,
       fetch_finished_at: null,
-      links_out_count: null,
+      links_out_count: auditsByHash.get(r.urlHash)?.linksOutCount ?? null,
+      title: auditsByHash.get(r.urlHash)?.title ?? null,
       _queue_state: r.state,
       _url_hash: r.urlHash,
       _enqueued_at: r.enqueueAt,

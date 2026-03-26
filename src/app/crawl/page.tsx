@@ -24,8 +24,28 @@ type CrawlJobStatusResponse = {
 };
 
 type CrawlUrlsResponse = {
-  items: Array<{ id: string; original_url: string; crawl_depth: number; _queue_state: string }>;
+  items: Array<{
+    id: string;
+    original_url: string;
+    crawl_depth: number;
+    _queue_state: string;
+    http_status: number | null;
+    title: string | null;
+  }>;
   next_cursor: string | null;
+};
+
+type CrawlSummaryResponse = {
+  jobId: string;
+  totals: {
+    urls: number;
+    broken: number;
+    redirects: number;
+    missingTitles: number;
+    missingMetaDescriptions: number;
+    missingH1: number;
+    exactDuplicates: number;
+  };
 };
 
 export default function CrawlPage() {
@@ -36,6 +56,7 @@ export default function CrawlPage() {
   const [loading, setLoading] = useState(false);
   const [crawling, setCrawling] = useState(false);
   const [crawlSteps, setCrawlSteps] = useState(0);
+  const [reportSummary, setReportSummary] = useState<CrawlSummaryResponse["totals"] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const summary = useMemo(() => {
@@ -126,6 +147,13 @@ export default function CrawlPage() {
     const res = await fetch(`/api/v1/crawl-jobs/${effectiveId}`, { cache: "no-store" });
     if (!res.ok) return;
     setStatus((await res.json()) as CrawlJobStatusResponse);
+    const summaryRes = await fetch(`/api/v1/crawl-jobs/${effectiveId}/reports?report=summary`, {
+      cache: "no-store",
+    });
+    if (summaryRes.ok) {
+      const summaryJson = (await summaryRes.json()) as CrawlSummaryResponse;
+      setReportSummary(summaryJson.totals);
+    }
   }
 
   async function loadUrls(id?: string) {
@@ -135,6 +163,12 @@ export default function CrawlPage() {
     if (!res.ok) return;
     const json = (await res.json()) as CrawlUrlsResponse;
     setUrls(json.items);
+  }
+
+  function exportReport(report: "issues" | "pages" | "duplicates", format: "csv" | "excel") {
+    if (!jobId) return;
+    const u = `/api/v1/crawl-jobs/${jobId}/reports?report=${report}&format=${format}`;
+    window.open(u, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -220,6 +254,49 @@ export default function CrawlPage() {
 
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
+            <div className="text-sm font-medium">Phase 1 Reports</div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("issues", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Issues CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("pages", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Pages CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("duplicates", "excel")}
+                disabled={!jobId}
+                type="button"
+              >
+                Duplicates Excel
+              </button>
+            </div>
+          </div>
+          {reportSummary ? (
+            <div className="grid grid-cols-2 gap-2 border-b border-zinc-100 px-6 py-3 text-xs text-zinc-600 md:grid-cols-4">
+              <div>URLs: {reportSummary.urls}</div>
+              <div>Broken: {reportSummary.broken}</div>
+              <div>Redirects: {reportSummary.redirects}</div>
+              <div>Missing title: {reportSummary.missingTitles}</div>
+              <div>Missing meta desc: {reportSummary.missingMetaDescriptions}</div>
+              <div>Missing H1: {reportSummary.missingH1}</div>
+              <div>Exact duplicates: {reportSummary.exactDuplicates}</div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-zinc-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
             <div className="text-sm font-medium">Discovered URLs</div>
             <button
               className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
@@ -236,13 +313,15 @@ export default function CrawlPage() {
                 <tr>
                   <th className="px-6 py-3 font-medium">URL</th>
                   <th className="px-6 py-3 font-medium">Depth</th>
+                  <th className="px-6 py-3 font-medium">HTTP</th>
+                  <th className="px-6 py-3 font-medium">Title</th>
                   <th className="px-6 py-3 font-medium">Queue state</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {urls.length === 0 ? (
                   <tr>
-                    <td className="px-6 py-6 text-zinc-500" colSpan={3}>
+                    <td className="px-6 py-6 text-zinc-500" colSpan={5}>
                       No URLs yet.
                     </td>
                   </tr>
@@ -251,6 +330,8 @@ export default function CrawlPage() {
                     <tr key={u.id}>
                       <td className="px-6 py-3 font-mono text-xs">{u.original_url}</td>
                       <td className="px-6 py-3">{u.crawl_depth}</td>
+                      <td className="px-6 py-3">{u.http_status ?? "-"}</td>
+                      <td className="px-6 py-3">{u.title ?? "-"}</td>
                       <td className="px-6 py-3">{u._queue_state}</td>
                     </tr>
                   ))
