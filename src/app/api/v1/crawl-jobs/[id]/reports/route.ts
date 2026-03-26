@@ -226,6 +226,15 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
       return issues.length > 0;
     }).length;
+    const contentQualityIssues = audits.filter((a) => {
+      const issues: string[] = [];
+      if ((a.wordCount ?? 0) < 150) issues.push("thin_content");
+      if (!a.title) issues.push("missing_title");
+      if (!a.metaDesc) issues.push("missing_meta_description");
+      if ((a.title?.length ?? 0) > 60) issues.push("title_too_long");
+      if ((a.metaDesc?.length ?? 0) > 160) issues.push("meta_description_too_long");
+      return issues.length > 0;
+    }).length;
 
     return NextResponse.json({
       jobId,
@@ -248,6 +257,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         hreflangIssues,
         indexableUrls,
         securityIssues,
+        contentQualityIssues,
       },
     });
   }
@@ -669,6 +679,27 @@ export async function GET(req: Request, ctx: RouteCtx) {
         scheme,
         canonical_url: a.canonicalUrl,
         has_sensitive_query_params: hasSensitiveQueryParams,
+        issue_count: issues.length,
+        issues: issues.join("|"),
+      };
+    });
+  } else if (report === "content_quality") {
+    rows = audits.map((a) => {
+      const issues: string[] = [];
+      if ((a.wordCount ?? 0) < 150) issues.push("thin_content");
+      if (!a.title) issues.push("missing_title");
+      if (!a.metaDesc) issues.push("missing_meta_description");
+      if ((a.title?.length ?? 0) > 60) issues.push("title_too_long");
+      if ((a.metaDesc?.length ?? 0) > 160) issues.push("meta_description_too_long");
+      return {
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        word_count: a.wordCount,
+        title: a.title,
+        title_length: a.titleLength,
+        meta_description: a.metaDesc,
+        meta_description_length: a.metaDescLength,
         issue_count: issues.length,
         issues: issues.join("|"),
       };

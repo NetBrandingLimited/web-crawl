@@ -60,6 +60,7 @@ type CrawlSummaryResponse = {
     hreflangIssues: number;
     indexableUrls: number;
     securityIssues: number;
+    contentQualityIssues: number;
   };
 };
 
@@ -199,7 +200,8 @@ export default function CrawlPage() {
       | "url_issues"
       | "directives_audit"
       | "hreflang_audit"
-      | "security_audit",
+      | "security_audit"
+      | "content_quality",
     format: "csv" | "excel",
   ) {
     if (!jobId) return;
@@ -412,6 +414,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("content_quality", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Content Quality CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportSitemapXml()}
                 disabled={!jobId}
                 type="button"
@@ -440,6 +450,7 @@ export default function CrawlPage() {
               <div>hreflang issues: {reportSummary.hreflangIssues}</div>
               <div>Indexable URLs: {reportSummary.indexableUrls}</div>
               <div>Security issues: {reportSummary.securityIssues}</div>
+              <div>Content issues: {reportSummary.contentQualityIssues}</div>
             </div>
           ) : null}
         </div>
