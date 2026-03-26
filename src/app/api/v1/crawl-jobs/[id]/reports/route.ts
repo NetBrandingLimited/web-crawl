@@ -497,16 +497,26 @@ export async function GET(req: Request, ctx: RouteCtx) {
 
     rows = queueRows.map((q) => {
       const audit = auditByHash.get(q.urlHash);
+      const inlinks = inlinksByHash.get(q.urlHash) ?? 0;
+      const outlinks = audit?.linksOutCount ?? 0;
+      // Simple crawl-native importance score: more inlinks and shallower depth rank higher.
+      const internalLinkScore = Number(
+        (
+          (Math.log2(inlinks + 1) * 3 + Math.log2(outlinks + 1) * 1.2 + 1 / (q.depth + 1)) *
+          10
+        ).toFixed(3),
+      );
       return {
         url: q.url,
         crawl_depth: q.depth,
         path_depth: normalizePathDepth(q.url),
-        inlinks: inlinksByHash.get(q.urlHash) ?? 0,
-        outlinks: audit?.linksOutCount ?? 0,
+        inlinks,
+        outlinks,
+        internal_link_score: internalLinkScore,
         http_status: audit?.httpStatus ?? null,
         title: audit?.title ?? null,
         queue_state: q.state,
-        is_orphan_like: q.depth > 0 && (inlinksByHash.get(q.urlHash) ?? 0) === 0,
+        is_orphan_like: q.depth > 0 && inlinks === 0,
       };
     });
   } else {
