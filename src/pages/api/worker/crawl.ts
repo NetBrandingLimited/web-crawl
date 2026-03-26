@@ -126,12 +126,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         for (const newUrl of discovered) {
           const hash = sha1Hex(newUrl);
-          const exists = await prisma.crawlQueue.findFirst({
-            where: { jobId: item.jobId, urlHash: hash },
-          });
-
-          if (!exists) {
-            await prisma.crawlQueue.create({
+          // Race-safe: another tick or concurrent worker may insert the same (jobId, urlHash).
+          await prisma.crawlQueue
+            .create({
               data: {
                 jobId: item.jobId,
                 urlHash: hash,
@@ -141,8 +138,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 priority: 0,
                 availableAt: new Date(),
               },
-            });
-          }
+            })
+            .catch(() => null);
         }
       }
 
