@@ -67,7 +67,12 @@ function isMissingAuditTableError(err: unknown): boolean {
   const msg = String(err);
   return (
     msg.includes("CrawlPageAudit") &&
-    (msg.includes("does not exist") || msg.includes("relation") || msg.includes("table"))
+    (msg.includes("does not exist") ||
+      msg.includes("relation") ||
+      msg.includes("table") ||
+      msg.includes("column") ||
+      msg.includes("unknown column") ||
+      msg.includes("UndefinedColumn"))
   );
 }
 
@@ -81,10 +86,11 @@ async function safeAuditWrite<T>(op: () => Promise<T>): Promise<T | null> {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return res.status(405).json({ message: "Method not allowed" });
-  }
+  try {
+    if (req.method !== "GET") {
+      res.setHeader("Allow", "GET");
+      return res.status(405).json({ message: "Method not allowed" });
+    }
 
   const jobIdFilter = parseJobIdFilter(req.query.jobId);
 
@@ -317,10 +323,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  return res.status(200).json({
-    processed: results.length,
-    results,
-    jobId: jobIdFilter ?? null,
-  });
+    return res.status(200).json({
+      processed: results.length,
+      results,
+      jobId: jobIdFilter ?? null,
+    });
+  } catch (err) {
+    console.error("crawl-worker fatal error:", err);
+    return res.status(500).json({
+      message: `Crawler failed: ${String(err)}`,
+      error: String(err),
+    });
+  }
 }
 
