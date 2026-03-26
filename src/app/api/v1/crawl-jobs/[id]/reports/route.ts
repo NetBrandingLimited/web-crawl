@@ -195,6 +195,12 @@ export async function GET(req: Request, ctx: RouteCtx) {
       return robots.includes("noindex") || robots.includes("nofollow") || robots.includes("none");
     }).length;
     const hreflangIssues = audits.filter((a) => a.hreflangCount === 0).length;
+    const indexableUrls = audits.filter((a) => {
+      const robots = (a.robotsMeta ?? "").toLowerCase();
+      const hasNoindex = robots.includes("noindex") || robots.includes("none");
+      const okStatus = a.httpStatus == null || (a.httpStatus >= 200 && a.httpStatus < 300);
+      return okStatus && !hasNoindex;
+    }).length;
 
     return NextResponse.json({
       jobId,
@@ -215,6 +221,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         urlIssues,
         directivesIssues,
         hreflangIssues,
+        indexableUrls,
       },
     });
   }

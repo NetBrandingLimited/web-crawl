@@ -58,6 +58,7 @@ type CrawlSummaryResponse = {
     urlIssues: number;
     directivesIssues: number;
     hreflangIssues: number;
+    indexableUrls: number;
   };
 };
 
@@ -201,6 +202,12 @@ export default function CrawlPage() {
   ) {
     if (!jobId) return;
     const u = `/api/v1/crawl-jobs/${jobId}/reports?report=${report}&format=${format}`;
+    window.open(u, "_blank", "noopener,noreferrer");
+  }
+
+  function exportSitemapXml() {
+    if (!jobId) return;
+    const u = `/api/v1/crawl-jobs/${jobId}/sitemap`;
     window.open(u, "_blank", "noopener,noreferrer");
   }
 
@@ -393,6 +400,14 @@ export default function CrawlPage() {
               >
                 hreflang CSV
               </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportSitemapXml()}
+                disabled={!jobId}
+                type="button"
+              >
+                Sitemap XML
+              </button>
             </div>
           </div>
           {reportSummary ? (
@@ -413,6 +428,7 @@ export default function CrawlPage() {
               <div>URL issues: {reportSummary.urlIssues}</div>
               <div>Directive issues: {reportSummary.directivesIssues}</div>
               <div>hreflang issues: {reportSummary.hreflangIssues}</div>
+              <div>Indexable URLs: {reportSummary.indexableUrls}</div>
             </div>
           ) : null}
         </div>
