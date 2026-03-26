@@ -49,6 +49,8 @@ type CrawlSummaryResponse = {
     missingMetaDescriptions: number;
     missingH1: number;
     exactDuplicates: number;
+    duplicateTitles: number;
+    duplicateMetaDescriptions: number;
   };
 };
 
@@ -310,6 +312,8 @@ export default function CrawlPage() {
               <div>Missing meta desc: {reportSummary.missingMetaDescriptions}</div>
               <div>Missing H1: {reportSummary.missingH1}</div>
               <div>Exact duplicates: {reportSummary.exactDuplicates}</div>
+              <div>Duplicate titles: {reportSummary.duplicateTitles}</div>
+              <div>Duplicate meta desc: {reportSummary.duplicateMetaDescriptions}</div>
             </div>
           ) : null}
         </div>

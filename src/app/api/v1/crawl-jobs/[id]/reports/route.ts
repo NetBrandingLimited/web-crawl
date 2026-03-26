@@ -46,6 +46,10 @@ function toDelimited(rows: Array<Record<string, unknown>>, delimiter: "," | "\t"
   return lines.join("\n");
 }
 
+function normalizeDupKey(raw: string) {
+  return raw.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 export async function GET(req: Request, ctx: RouteCtx) {
   const { id: jobId } = await ctx.params;
   const { searchParams } = new URL(req.url);
@@ -75,6 +79,35 @@ export async function GET(req: Request, ctx: RouteCtx) {
         audits.some((b) => b.id !== a.id && b.contentHash != null && b.contentHash === a.contentHash),
     ).length;
 
+    // Duplicate title / meta description: count URLs that are part of duplicate groups.
+    let duplicateTitles = 0;
+    const titlesByKey = new Map<string, typeof audits>();
+    for (const a of audits) {
+      if (!a.title) continue;
+      const key = normalizeDupKey(a.title);
+      if (!key) continue;
+      const arr = titlesByKey.get(key) ?? [];
+      arr.push(a);
+      titlesByKey.set(key, arr);
+    }
+    for (const arr of titlesByKey.values()) {
+      if (arr.length >= 2) duplicateTitles += arr.length;
+    }
+
+    let duplicateMetaDescriptions = 0;
+    const metaByKey = new Map<string, typeof audits>();
+    for (const a of audits) {
+      if (!a.metaDesc) continue;
+      const key = normalizeDupKey(a.metaDesc);
+      if (!key) continue;
+      const arr = metaByKey.get(key) ?? [];
+      arr.push(a);
+      metaByKey.set(key, arr);
+    }
+    for (const arr of metaByKey.values()) {
+      if (arr.length >= 2) duplicateMetaDescriptions += arr.length;
+    }
+
     return NextResponse.json({
       jobId,
       totals: {
@@ -85,6 +118,8 @@ export async function GET(req: Request, ctx: RouteCtx) {
         missingMetaDescriptions,
         missingH1,
         exactDuplicates,
+        duplicateTitles,
+        duplicateMetaDescriptions,
       },
     });
   }
@@ -112,6 +147,23 @@ export async function GET(req: Request, ctx: RouteCtx) {
       fetch_error: a.fetchError,
     }));
   } else if (report === "duplicates") {
+    const rowsOut: Array<Record<string, unknown>> = [];
+    // Keep a stable schema for CSV/Excel by always emitting the same columns.
+    const pushRow = (r: {
+      type: string;
+      duplicate_key: string;
+      group_size: number;
+      url: string;
+      depth: number;
+      http_status: number | null;
+      title: string | null;
+      meta_description: string | null;
+      content_hash: string | null;
+    }) => {
+      rowsOut.push(r);
+    };
+
+    // 1) Exact duplicates by content hash
     const byHash = new Map<string, typeof audits>();
     for (const a of audits) {
       if (!a.contentHash) continue;
@@ -122,17 +174,75 @@ export async function GET(req: Request, ctx: RouteCtx) {
     for (const [hash, list] of byHash) {
       if (list.length < 2) continue;
       for (const row of list) {
-        rows.push({
-          content_hash: hash,
-          duplicate_group_size: list.length,
+        pushRow({
+          type: "exact_content",
+          duplicate_key: hash,
+          group_size: list.length,
           url: row.url,
           depth: row.depth,
+          http_status: row.httpStatus ?? null,
           title: row.title,
-          word_count: row.wordCount,
-          http_status: row.httpStatus,
+          meta_description: row.metaDesc,
+          content_hash: hash,
         });
       }
     }
+
+    // 2) Duplicate titles
+    const byTitle = new Map<string, typeof audits>();
+    for (const a of audits) {
+      if (!a.title) continue;
+      const key = normalizeDupKey(a.title);
+      if (!key) continue;
+      const arr = byTitle.get(key) ?? [];
+      arr.push(a);
+      byTitle.set(key, arr);
+    }
+    for (const [key, list] of byTitle) {
+      if (list.length < 2) continue;
+      for (const row of list) {
+        pushRow({
+          type: "duplicate_title",
+          duplicate_key: key,
+          group_size: list.length,
+          url: row.url,
+          depth: row.depth,
+          http_status: row.httpStatus ?? null,
+          title: row.title,
+          meta_description: row.metaDesc,
+          content_hash: row.contentHash ?? null,
+        });
+      }
+    }
+
+    // 3) Duplicate meta descriptions
+    const byMeta = new Map<string, typeof audits>();
+    for (const a of audits) {
+      if (!a.metaDesc) continue;
+      const key = normalizeDupKey(a.metaDesc);
+      if (!key) continue;
+      const arr = byMeta.get(key) ?? [];
+      arr.push(a);
+      byMeta.set(key, arr);
+    }
+    for (const [key, list] of byMeta) {
+      if (list.length < 2) continue;
+      for (const row of list) {
+        pushRow({
+          type: "duplicate_meta_description",
+          duplicate_key: key,
+          group_size: list.length,
+          url: row.url,
+          depth: row.depth,
+          http_status: row.httpStatus ?? null,
+          title: row.title,
+          meta_description: row.metaDesc,
+          content_hash: row.contentHash ?? null,
+        });
+      }
+    }
+
+    rows = rowsOut;
   } else if (report === "redirects") {
     const fetches = await prisma.urlFetch.findMany({
       where: { jobId },
