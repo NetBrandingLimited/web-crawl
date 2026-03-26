@@ -173,6 +173,23 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const orphanPages = queueRows.filter(
       (q) => q.depth > 0 && (inlinksByHash.get(q.urlHash) ?? 0) === 0,
     ).length;
+    const urlIssues = queueRows.filter((q) => {
+      try {
+        const u = new URL(q.url);
+        const full = u.toString();
+        const path = u.pathname;
+        const issues =
+          /[A-Z]/.test(full) ||
+          path.includes("_") ||
+          u.search.length > 0 ||
+          /[^\x00-\x7F]/.test(full) ||
+          full.length > 120 ||
+          /\/\/{2,}/.test(path);
+        return issues;
+      } catch {
+        return true;
+      }
+    }).length;
 
     return NextResponse.json({
       jobId,
@@ -190,6 +207,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         canonicalIssues,
         headingIssues,
         orphanPages,
+        urlIssues,
       },
     });
   }
@@ -518,6 +536,40 @@ export async function GET(req: Request, ctx: RouteCtx) {
         queue_state: q.state,
         is_orphan_like: q.depth > 0 && inlinks === 0,
       };
+    });
+  } else if (report === "url_issues") {
+    rows = queueRows.map((q) => {
+      const issues: string[] = [];
+      try {
+        const u = new URL(q.url);
+        const full = u.toString();
+        const path = u.pathname;
+        if (/[A-Z]/.test(full)) issues.push("uppercase_characters");
+        if (path.includes("_")) issues.push("underscore_in_path");
+        if (u.search.length > 0) issues.push("has_parameters");
+        if (/[^\x00-\x7F]/.test(full)) issues.push("non_ascii_characters");
+        if (full.length > 120) issues.push("long_url");
+        if (/\/\/{2,}/.test(path)) issues.push("repeated_path_segments");
+        return {
+          url: q.url,
+          crawl_depth: q.depth,
+          url_length: full.length,
+          has_query_params: u.search.length > 0,
+          query_param_count: u.searchParams.size,
+          issue_count: issues.length,
+          issues: issues.join("|"),
+        };
+      } catch {
+        return {
+          url: q.url,
+          crawl_depth: q.depth,
+          url_length: q.url.length,
+          has_query_params: null,
+          query_param_count: null,
+          issue_count: 1,
+          issues: "invalid_url",
+        };
+      }
     });
   } else {
     rows = audits
