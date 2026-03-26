@@ -52,10 +52,16 @@ export async function GET(req: Request, ctx: RouteCtx) {
   const format = searchParams.get("format") === "excel" ? "excel" : "csv";
   const report = searchParams.get("report") ?? "issues";
 
-  const audits = await prisma.crawlPageAudit.findMany({
-    where: { jobId },
-    orderBy: [{ depth: "asc" }, { fetchedAt: "desc" }],
-  });
+  let audits: Awaited<ReturnType<typeof prisma.crawlPageAudit.findMany>>;
+  try {
+    audits = await prisma.crawlPageAudit.findMany({
+      where: { jobId },
+      orderBy: [{ depth: "asc" }, { fetchedAt: "desc" }],
+    });
+  } catch (err) {
+    if (!String(err).includes("CrawlPageAudit")) throw err;
+    audits = [];
+  }
 
   if (report === "summary") {
     const broken = audits.filter((a) => a.httpStatus != null && a.httpStatus >= 400).length;

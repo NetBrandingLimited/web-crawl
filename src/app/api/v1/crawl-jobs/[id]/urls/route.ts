@@ -30,18 +30,31 @@ export async function GET(req: Request, ctx: RouteCtx) {
   const nextCursor = hasMore ? items[items.length - 1]?.id : null;
   type QueueRow = (typeof items)[number];
 
-  const audits = await prisma.crawlPageAudit.findMany({
-    where: { jobId, urlHash: { in: items.map((i) => i.urlHash) } },
-    select: {
-      urlHash: true,
-      httpStatus: true,
-      contentType: true,
-      title: true,
-      canonicalUrl: true,
-      linksOutCount: true,
-      fetchError: true,
-    },
-  });
+  let audits: Array<{
+    urlHash: string;
+    httpStatus: number | null;
+    contentType: string | null;
+    title: string | null;
+    canonicalUrl: string | null;
+    linksOutCount: number;
+    fetchError: string | null;
+  }> = [];
+  try {
+    audits = await prisma.crawlPageAudit.findMany({
+      where: { jobId, urlHash: { in: items.map((i) => i.urlHash) } },
+      select: {
+        urlHash: true,
+        httpStatus: true,
+        contentType: true,
+        title: true,
+        canonicalUrl: true,
+        linksOutCount: true,
+        fetchError: true,
+      },
+    });
+  } catch (err) {
+    if (!String(err).includes("CrawlPageAudit")) throw err;
+  }
   const auditsByHash = new Map(audits.map((a) => [a.urlHash, a]));
 
   return NextResponse.json({

@@ -63,6 +63,23 @@ function cleanText(v: string | undefined | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function isMissingAuditTableError(err: unknown): boolean {
+  const msg = String(err);
+  return (
+    msg.includes("CrawlPageAudit") &&
+    (msg.includes("does not exist") || msg.includes("relation") || msg.includes("table"))
+  );
+}
+
+async function safeAuditWrite<T>(op: () => Promise<T>): Promise<T | null> {
+  try {
+    return await op();
+  } catch (err) {
+    if (isMissingAuditTableError(err)) return null;
+    throw err;
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -143,25 +160,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
 
-      await prisma.crawlPageAudit.upsert({
-        where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
-        create: {
-          jobId: item.jobId,
-          urlHash,
-          url: finalNormalized,
-          depth: item.depth,
-          httpStatus: status,
-          contentType,
-        },
-        update: {
-          url: finalNormalized,
-          depth: item.depth,
-          httpStatus: status,
-          contentType,
-          fetchError: null,
-          fetchedAt: new Date(),
-        },
-      });
+      await safeAuditWrite(() =>
+        prisma.crawlPageAudit.upsert({
+          where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
+          create: {
+            jobId: item.jobId,
+            urlHash,
+            url: finalNormalized,
+            depth: item.depth,
+            httpStatus: status,
+            contentType,
+          },
+          update: {
+            url: finalNormalized,
+            depth: item.depth,
+            httpStatus: status,
+            contentType,
+            fetchError: null,
+            fetchedAt: new Date(),
+          },
+        }),
+      );
 
       // Parse HTML and discover new URLs
       if (contentType.includes("text/html") && item.depth < item.job.maxDepth) {
@@ -226,24 +245,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const wordCount = bodyText.length === 0 ? 0 : bodyText.split(" ").length;
         const contentHash = bodyText.length > 0 ? sha1Hex(bodyText.toLowerCase()) : null;
 
-        await prisma.crawlPageAudit.update({
-          where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
-          data: {
-            title,
-            titleLength: title?.length ?? null,
-            metaDesc,
-            metaDescLength: metaDesc?.length ?? null,
-            h1Count,
-            h2Count,
-            canonicalUrl,
-            robotsMeta,
-            hreflangCount,
-            linksOutCount,
-            wordCount,
-            contentHash,
-            fetchedAt: new Date(),
-          },
-        });
+        await safeAuditWrite(() =>
+          prisma.crawlPageAudit.update({
+            where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
+            data: {
+              title,
+              titleLength: title?.length ?? null,
+              metaDesc,
+              metaDescLength: metaDesc?.length ?? null,
+              h1Count,
+              h2Count,
+              canonicalUrl,
+              robotsMeta,
+              hreflangCount,
+              linksOutCount,
+              wordCount,
+              contentHash,
+              fetchedAt: new Date(),
+            },
+          }),
+        );
       }
 
       await prisma.crawlQueue.update({
@@ -257,23 +278,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         where: { id: item.id },
         data: { state: "failed" },
       });
-      await prisma.crawlPageAudit.upsert({
-        where: { jobId_urlHash: { jobId: item.jobId, urlHash: item.urlHash } },
-        create: {
-          jobId: item.jobId,
-          urlHash: item.urlHash,
-          url: item.url,
-          depth: item.depth,
-          fetchError: String(err).slice(0, 500),
-          fetchedAt: new Date(),
-        },
-        update: {
-          url: item.url,
-          depth: item.depth,
-          fetchError: String(err).slice(0, 500),
-          fetchedAt: new Date(),
-        },
-      });
+      await safeAuditWrite(() =>
+        prisma.crawlPageAudit.upsert({
+          where: { jobId_urlHash: { jobId: item.jobId, urlHash: item.urlHash } },
+          create: {
+            jobId: item.jobId,
+            urlHash: item.urlHash,
+            url: item.url,
+            depth: item.depth,
+            fetchError: String(err).slice(0, 500),
+            fetchedAt: new Date(),
+          },
+          update: {
+            url: item.url,
+            depth: item.depth,
+            fetchError: String(err).slice(0, 500),
+            fetchedAt: new Date(),
+          },
+        }),
+      );
       results.push({ url: item.url, ok: false, status: 0, error: String(err) });
     }
   }
