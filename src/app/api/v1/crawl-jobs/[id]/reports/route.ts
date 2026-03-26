@@ -201,6 +201,31 @@ export async function GET(req: Request, ctx: RouteCtx) {
       const okStatus = a.httpStatus == null || (a.httpStatus >= 200 && a.httpStatus < 300);
       return okStatus && !hasNoindex;
     }).length;
+    const securityIssues = audits.filter((a) => {
+      const issues: string[] = [];
+      try {
+        const u = new URL(a.url);
+        if (u.protocol !== "https:") issues.push("insecure_http_url");
+        for (const key of u.searchParams.keys()) {
+          const k = key.toLowerCase();
+          if (k.includes("token") || k.includes("password") || k.includes("secret") || k.includes("key")) {
+            issues.push("sensitive_query_param");
+            break;
+          }
+        }
+      } catch {
+        issues.push("invalid_url");
+      }
+      if (a.canonicalUrl) {
+        try {
+          const c = new URL(a.canonicalUrl, a.url);
+          if (c.protocol !== "https:") issues.push("insecure_canonical");
+        } catch {
+          issues.push("invalid_canonical");
+        }
+      }
+      return issues.length > 0;
+    }).length;
 
     return NextResponse.json({
       jobId,
@@ -222,6 +247,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         directivesIssues,
         hreflangIssues,
         indexableUrls,
+        securityIssues,
       },
     });
   }
@@ -606,6 +632,45 @@ export async function GET(req: Request, ctx: RouteCtx) {
         is_indexable_candidate:
           !hasNoindex && (a.httpStatus == null || (a.httpStatus >= 200 && a.httpStatus < 300)),
         issue_count: Number(hasNoindex) + Number(hasNofollow),
+      };
+    });
+  } else if (report === "security_audit") {
+    rows = audits.map((a) => {
+      const issues: string[] = [];
+      let scheme: string | null = null;
+      let hasSensitiveQueryParams = false;
+      try {
+        const u = new URL(a.url);
+        scheme = u.protocol.replace(":", "");
+        if (u.protocol !== "https:") issues.push("insecure_http_url");
+        for (const key of u.searchParams.keys()) {
+          const k = key.toLowerCase();
+          if (k.includes("token") || k.includes("password") || k.includes("secret") || k.includes("key")) {
+            hasSensitiveQueryParams = true;
+            issues.push("sensitive_query_param");
+            break;
+          }
+        }
+      } catch {
+        issues.push("invalid_url");
+      }
+      if (a.canonicalUrl) {
+        try {
+          const c = new URL(a.canonicalUrl, a.url);
+          if (c.protocol !== "https:") issues.push("insecure_canonical");
+        } catch {
+          issues.push("invalid_canonical");
+        }
+      }
+      return {
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        scheme,
+        canonical_url: a.canonicalUrl,
+        has_sensitive_query_params: hasSensitiveQueryParams,
+        issue_count: issues.length,
+        issues: issues.join("|"),
       };
     });
   } else if (report === "hreflang_audit") {
