@@ -17,6 +17,15 @@ const FETCH_TIMEOUT_MS = Math.min(
 );
 const MAX_DISCOVERED_LINKS = parsePositiveInt(process.env.CRAWL_MAX_DISCOVERED_LINKS, 400);
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseJobIdFilter(raw: string | string[] | undefined): string | undefined {
+  const s = typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : undefined;
+  if (!s || !UUID_RE.test(s)) return undefined;
+  return s;
+}
+
 function stripTrackingParams(url: URL) {
   const toDelete: string[] = [];
   for (const [k] of url.searchParams) {
@@ -54,10 +63,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: "Method not allowed" });
   }
 
+  const jobIdFilter = parseJobIdFilter(req.query.jobId);
+
   const pending = await prisma.crawlQueue.findMany({
     where: {
       state: "pending",
       availableAt: { lte: new Date() },
+      ...(jobIdFilter ? { jobId: jobIdFilter } : {}),
     },
     orderBy: { priority: "desc" },
     take: URLS_PER_RUN,
@@ -65,7 +77,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
 
   if (pending.length === 0) {
-    return res.status(200).json({ message: "No pending URLs" });
+    return res.status(200).json({ message: "No pending URLs", jobId: jobIdFilter ?? null });
+  }
+
+  const touchedJobIds = new Set<string>();
+  for (const jid of pending.map((p) => p.jobId)) {
+    touchedJobIds.add(jid);
+    await prisma.crawlJob.updateMany({
+      where: { id: jid, startedAt: null },
+      data: { status: "running", startedAt: new Date() },
+    });
   }
 
   const results: { url: string; status: number; ok: boolean; error?: string }[] = [];
@@ -147,9 +168,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const now = new Date();
-        if (toEnqueue.length > 0) {
+        const queuedSoFar = await prisma.crawlQueue.count({ where: { jobId: item.jobId } });
+        const room = item.job.maxPages - queuedSoFar;
+        const allowedNew = Math.max(0, Math.min(room, toEnqueue.length));
+        const slice = allowedNew > 0 ? toEnqueue.slice(0, allowedNew) : [];
+
+        if (slice.length > 0) {
           await prisma.crawlQueue.createMany({
-            data: toEnqueue.map((row) => ({
+            data: slice.map((row) => ({
               jobId: item.jobId,
               urlHash: row.urlHash,
               url: row.url,
@@ -178,6 +204,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  return res.status(200).json({ processed: results.length, results });
+  const nowCheck = new Date();
+  for (const jid of touchedJobIds) {
+    const pendingLeft = await prisma.crawlQueue.count({
+      where: { jobId: jid, state: "pending", availableAt: { lte: nowCheck } },
+    });
+    const inProgressLeft = await prisma.crawlQueue.count({
+      where: { jobId: jid, state: "in_progress" },
+    });
+    if (pendingLeft === 0 && inProgressLeft === 0) {
+      await prisma.crawlJob.updateMany({
+        where: { id: jid, status: { not: "canceled" } },
+        data: { status: "completed", finishedAt: new Date() },
+      });
+    }
+  }
+
+  return res.status(200).json({
+    processed: results.length,
+    results,
+    jobId: jobIdFilter ?? null,
+  });
 }
 

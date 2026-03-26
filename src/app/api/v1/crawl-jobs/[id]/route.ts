@@ -30,7 +30,11 @@ export async function GET(_req: Request, ctx: RouteCtx) {
     prisma.crawlQueue.count({ where: { jobId: id, state: "skipped" } }),
   ]);
 
-  const failed = await prisma.urlFetch.count({ where: { jobId: id, status: "error" } });
+  const [fetchFailed, queueFailed] = await Promise.all([
+    prisma.urlFetch.count({ where: { jobId: id, status: "error" } }),
+    prisma.crawlQueue.count({ where: { jobId: id, state: "failed" } }),
+  ]);
+  const failed = fetchFailed + queueFailed;
 
   const fetched = done + skipped;
 

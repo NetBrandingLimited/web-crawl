@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 
+const WORKER_STEPS_CAP = 4000;
+
 type CrawlJobCreateResponse = {
   id: string;
   status: string;
@@ -32,6 +34,8 @@ export default function CrawlPage() {
   const [status, setStatus] = useState<CrawlJobStatusResponse | null>(null);
   const [urls, setUrls] = useState<CrawlUrlsResponse["items"]>([]);
   const [loading, setLoading] = useState(false);
+  const [crawling, setCrawling] = useState(false);
+  const [crawlSteps, setCrawlSteps] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const summary = useMemo(() => {
@@ -45,6 +49,43 @@ export default function CrawlPage() {
       { label: "Failed", value: status.stats.failed },
     ];
   }, [status]);
+
+  async function drainWorkerForJob(id: string) {
+    setCrawling(true);
+    setCrawlSteps(0);
+    setError(null);
+    try {
+      for (let step = 0; step < WORKER_STEPS_CAP; step++) {
+        const res = await fetch(`/api/worker/crawl?jobId=${encodeURIComponent(id)}`, {
+          cache: "no-store",
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          message?: string;
+          processed?: number;
+          error?: string;
+        };
+        if (!res.ok) {
+          throw new Error(
+            typeof json === "object" && json && "message" in json && typeof json.message === "string"
+              ? json.message
+              : `Worker HTTP ${res.status}`,
+          );
+        }
+        if (json.message === "No pending URLs") break;
+        const processed = Number(json.processed ?? 0);
+        if (!Number.isFinite(processed) || processed <= 0) break;
+        setCrawlSteps(step + 1);
+        await refresh(id);
+        await loadUrls(id);
+      }
+      await refresh(id);
+      await loadUrls(id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Crawl worker failed");
+    } finally {
+      setCrawling(false);
+    }
+  }
 
   async function start() {
     setLoading(true);
@@ -66,11 +107,17 @@ export default function CrawlPage() {
       setJobId(json.id);
       await refresh(json.id);
       await loadUrls(json.id);
+      await drainWorkerForJob(json.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start crawl");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function runWorkerOnly() {
+    if (!jobId) return;
+    await drainWorkerForJob(jobId);
   }
 
   async function refresh(id?: string) {
@@ -97,7 +144,9 @@ export default function CrawlPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Crawler & URL Discovery</h1>
             <p className="mt-2 text-sm text-zinc-600">
-              This UI currently creates a crawl job and shows the seeded queue. Next step is wiring the real crawler worker.
+              Starts a site crawl (same host, depth and page limits from the job), discovers internal links, and records HTTP status per URL.
+              This is a lightweight crawler—not a full Screaming Frog replacement: advanced SEO checks (JS rendering, duplicate packs, custom
+              extractions, sitemap builder) would be follow-on work on top of this pipeline.
             </p>
           </div>
           <div className="text-right text-xs text-zinc-500">
@@ -131,11 +180,24 @@ export default function CrawlPage() {
             <button
               className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg bg-zinc-900 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
               onClick={start}
-              disabled={loading || domain.trim().length === 0}
+              disabled={loading || crawling || domain.trim().length === 0}
               type="button"
             >
-              {loading ? "Starting..." : "Start crawl job"}
+              {loading || crawling ? "Crawling…" : "Start crawl job"}
             </button>
+            <button
+              className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
+              onClick={() => runWorkerOnly()}
+              disabled={!jobId || loading || crawling}
+              type="button"
+            >
+              Continue crawl (drain queue)
+            </button>
+            {crawling ? (
+              <p className="mt-2 text-xs text-zinc-500">
+                Calling the serverless worker in batches (leave this tab open). Batch {crawlSteps}…
+              </p>
+            ) : null}
             {error ? <div className="mt-3 text-sm text-red-600">{error}</div> : null}
           </div>
 
