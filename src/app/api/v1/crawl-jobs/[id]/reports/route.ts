@@ -71,6 +71,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
   const { searchParams } = new URL(req.url);
   const format = searchParams.get("format") === "excel" ? "excel" : "csv";
   const report = searchParams.get("report") ?? "issues";
+  const queueRows = await prisma.crawlQueue.findMany({
+    where: { jobId },
+    select: { urlHash: true, url: true, discoveredFromUrlHash: true, depth: true, state: true },
+  });
 
   let audits: Awaited<ReturnType<typeof prisma.crawlPageAudit.findMany>>;
   try {
@@ -161,6 +165,14 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const headingIssues = audits.filter(
       (a) => a.h1Count === 0 || a.h1Count > 1 || a.h2Count === 0,
     ).length;
+    const inlinksByHash = new Map<string, number>();
+    for (const q of queueRows) {
+      if (!q.discoveredFromUrlHash) continue;
+      inlinksByHash.set(q.urlHash, (inlinksByHash.get(q.urlHash) ?? 0) + 1);
+    }
+    const orphanPages = queueRows.filter(
+      (q) => q.depth > 0 && (inlinksByHash.get(q.urlHash) ?? 0) === 0,
+    ).length;
 
     return NextResponse.json({
       jobId,
@@ -177,6 +189,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         nearDuplicates,
         canonicalIssues,
         headingIssues,
+        orphanPages,
       },
     });
   }
@@ -463,6 +476,37 @@ export async function GET(req: Request, ctx: RouteCtx) {
         meta_description_length: a.metaDescLength,
         heading_issue_count: issues.length,
         heading_issues: issues.join("|"),
+      };
+    });
+  } else if (report === "site_structure") {
+    const inlinksByHash = new Map<string, number>();
+    for (const q of queueRows) {
+      if (!q.discoveredFromUrlHash) continue;
+      inlinksByHash.set(q.urlHash, (inlinksByHash.get(q.urlHash) ?? 0) + 1);
+    }
+
+    const auditByHash = new Map(audits.map((a) => [a.urlHash, a]));
+    const normalizePathDepth = (rawUrl: string) => {
+      try {
+        const u = new URL(rawUrl);
+        return u.pathname.split("/").filter(Boolean).length;
+      } catch {
+        return 0;
+      }
+    };
+
+    rows = queueRows.map((q) => {
+      const audit = auditByHash.get(q.urlHash);
+      return {
+        url: q.url,
+        crawl_depth: q.depth,
+        path_depth: normalizePathDepth(q.url),
+        inlinks: inlinksByHash.get(q.urlHash) ?? 0,
+        outlinks: audit?.linksOutCount ?? 0,
+        http_status: audit?.httpStatus ?? null,
+        title: audit?.title ?? null,
+        queue_state: q.state,
+        is_orphan_like: q.depth > 0 && (inlinksByHash.get(q.urlHash) ?? 0) === 0,
       };
     });
   } else {
