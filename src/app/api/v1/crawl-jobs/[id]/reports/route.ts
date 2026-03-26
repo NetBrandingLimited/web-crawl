@@ -194,6 +194,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
       const robots = (a.robotsMeta ?? "").toLowerCase();
       return robots.includes("noindex") || robots.includes("nofollow") || robots.includes("none");
     }).length;
+    const hreflangIssues = audits.filter((a) => a.hreflangCount === 0).length;
 
     return NextResponse.json({
       jobId,
@@ -213,6 +214,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         orphanPages,
         urlIssues,
         directivesIssues,
+        hreflangIssues,
       },
     });
   }
@@ -599,6 +601,17 @@ export async function GET(req: Request, ctx: RouteCtx) {
         issue_count: Number(hasNoindex) + Number(hasNofollow),
       };
     });
+  } else if (report === "hreflang_audit") {
+    rows = audits.map((a) => ({
+      url: a.url,
+      depth: a.depth,
+      http_status: a.httpStatus,
+      hreflang_count: a.hreflangCount,
+      has_hreflang: a.hreflangCount > 0,
+      issue: a.hreflangCount > 0 ? null : "missing_hreflang",
+      title: a.title,
+      canonical_url: a.canonicalUrl,
+    }));
   } else {
     rows = audits
       .map((a) => {

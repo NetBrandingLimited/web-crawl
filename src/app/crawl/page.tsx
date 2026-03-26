@@ -57,6 +57,7 @@ type CrawlSummaryResponse = {
     orphanPages: number;
     urlIssues: number;
     directivesIssues: number;
+    hreflangIssues: number;
   };
 };
 
@@ -194,7 +195,8 @@ export default function CrawlPage() {
       | "heading_audit"
       | "site_structure"
       | "url_issues"
-      | "directives_audit",
+      | "directives_audit"
+      | "hreflang_audit",
     format: "csv" | "excel",
   ) {
     if (!jobId) return;
@@ -383,6 +385,14 @@ export default function CrawlPage() {
               >
                 Directives CSV
               </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("hreflang_audit", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                hreflang CSV
+              </button>
             </div>
           </div>
           {reportSummary ? (
@@ -402,6 +412,7 @@ export default function CrawlPage() {
               <div>Orphan-like pages: {reportSummary.orphanPages}</div>
               <div>URL issues: {reportSummary.urlIssues}</div>
               <div>Directive issues: {reportSummary.directivesIssues}</div>
+              <div>hreflang issues: {reportSummary.hreflangIssues}</div>
             </div>
           ) : null}
         </div>
