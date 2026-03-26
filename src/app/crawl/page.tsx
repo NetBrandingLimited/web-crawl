@@ -51,6 +51,7 @@ type CrawlSummaryResponse = {
     exactDuplicates: number;
     duplicateTitles: number;
     duplicateMetaDescriptions: number;
+    nearDuplicates: number;
   };
 };
 
@@ -182,7 +183,8 @@ export default function CrawlPage() {
       | "duplicates"
       | "redirects"
       | "duplicate_titles"
-      | "duplicate_meta_descriptions",
+      | "duplicate_meta_descriptions"
+      | "near_duplicates",
     format: "csv" | "excel",
   ) {
     if (!jobId) return;
@@ -323,6 +325,14 @@ export default function CrawlPage() {
               >
                 Duplicate Meta CSV
               </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("near_duplicates", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Near Duplicates CSV
+              </button>
             </div>
           </div>
           {reportSummary ? (
@@ -336,6 +346,7 @@ export default function CrawlPage() {
               <div>Exact duplicates: {reportSummary.exactDuplicates}</div>
               <div>Duplicate titles: {reportSummary.duplicateTitles}</div>
               <div>Duplicate meta desc: {reportSummary.duplicateMetaDescriptions}</div>
+              <div>Near duplicates: {reportSummary.nearDuplicates}</div>
             </div>
           ) : null}
         </div>

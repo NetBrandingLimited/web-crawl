@@ -50,6 +50,22 @@ function normalizeDupKey(raw: string) {
   return raw.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function tokenizeForSimilarity(raw: string) {
+  return normalizeDupKey(raw)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(" ")
+    .filter((t) => t.length >= 2);
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>) {
+  if (a.size === 0 && b.size === 0) return 1;
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const v of a) if (b.has(v)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
 export async function GET(req: Request, ctx: RouteCtx) {
   const { id: jobId } = await ctx.params;
   const { searchParams } = new URL(req.url);
@@ -108,6 +124,28 @@ export async function GET(req: Request, ctx: RouteCtx) {
       if (arr.length >= 2) duplicateMetaDescriptions += arr.length;
     }
 
+    // Near-duplicate count based on title + meta-description token similarity.
+    const nearDupUrlHashes = new Set<string>();
+    const docs = audits
+      .map((a) => ({
+        urlHash: a.urlHash,
+        tokens: new Set(
+          tokenizeForSimilarity(`${a.title ?? ""} ${a.metaDesc ?? ""}`).slice(0, 256),
+        ),
+      }))
+      .filter((d) => d.tokens.size >= 8);
+    const docsLimit = Math.min(docs.length, 1200);
+    for (let i = 0; i < docsLimit; i++) {
+      for (let j = i + 1; j < docsLimit; j++) {
+        const score = jaccardSimilarity(docs[i].tokens, docs[j].tokens);
+        if (score >= 0.8) {
+          nearDupUrlHashes.add(docs[i].urlHash);
+          nearDupUrlHashes.add(docs[j].urlHash);
+        }
+      }
+    }
+    const nearDuplicates = nearDupUrlHashes.size;
+
     return NextResponse.json({
       jobId,
       totals: {
@@ -120,6 +158,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         exactDuplicates,
         duplicateTitles,
         duplicateMetaDescriptions,
+        nearDuplicates,
       },
     });
   }
@@ -312,6 +351,44 @@ export async function GET(req: Request, ctx: RouteCtx) {
           http_status: row.httpStatus,
           title: row.title,
           meta_description: row.metaDesc,
+        });
+      }
+    }
+  } else if (report === "near_duplicates") {
+    const docs = audits
+      .map((a) => ({
+        url: a.url,
+        depth: a.depth,
+        httpStatus: a.httpStatus,
+        title: a.title,
+        metaDesc: a.metaDesc,
+        tokenCount: tokenizeForSimilarity(`${a.title ?? ""} ${a.metaDesc ?? ""}`).length,
+        tokenSet: new Set(
+          tokenizeForSimilarity(`${a.title ?? ""} ${a.metaDesc ?? ""}`).slice(0, 256),
+        ),
+      }))
+      .filter((d) => d.tokenSet.size >= 8);
+
+    const limit = Math.min(docs.length, 1200);
+    for (let i = 0; i < limit; i++) {
+      for (let j = i + 1; j < limit; j++) {
+        const similarity = jaccardSimilarity(docs[i].tokenSet, docs[j].tokenSet);
+        if (similarity < 0.8) continue;
+        rows.push({
+          similarity: Number(similarity.toFixed(3)),
+          url_a: docs[i].url,
+          depth_a: docs[i].depth,
+          http_status_a: docs[i].httpStatus,
+          title_a: docs[i].title,
+          meta_description_a: docs[i].metaDesc,
+          token_count_a: docs[i].tokenCount,
+          url_b: docs[j].url,
+          depth_b: docs[j].depth,
+          http_status_b: docs[j].httpStatus,
+          title_b: docs[j].title,
+          meta_description_b: docs[j].metaDesc,
+          token_count_b: docs[j].tokenCount,
+          method: "title_meta_jaccard",
         });
       }
     }
