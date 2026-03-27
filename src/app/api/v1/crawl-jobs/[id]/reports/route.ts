@@ -19,7 +19,10 @@ function classifyIssues(row: {
   xRobotsTag: string | null;
 }) {
   const issues: string[] = [];
-  if (row.fetchError) issues.push("fetch_error");
+  if (row.fetchError) {
+    if (row.fetchError === "robots_disallowed") issues.push("robots_txt_disallowed");
+    else issues.push("fetch_error");
+  }
   if (row.httpStatus != null && row.httpStatus >= 400 && row.httpStatus < 500) issues.push("client_error");
   if (row.httpStatus != null && row.httpStatus >= 500) issues.push("server_error");
   if (row.httpStatus != null && row.httpStatus >= 300 && row.httpStatus < 400) issues.push("redirect");
@@ -230,6 +233,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
       return okStatus && !hasNoindex;
     }).length;
     const pagesWithJsonLd = audits.filter((a) => a.jsonLdCount > 0).length;
+    const robotsTxtBlocked = audits.filter((a) => a.fetchError === "robots_disallowed").length;
     const securityIssues = audits.filter((a) => {
       const issues: string[] = [];
       try {
@@ -300,6 +304,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagesWithMissingImageAlt,
         totalImagesMissingAlt,
         pagesWithJsonLd,
+        robotsTxtBlocked,
       },
     });
   }
@@ -831,6 +836,14 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = chainRows;
+  } else if (report === "robots_blocked") {
+    rows = audits
+      .filter((a) => a.fetchError === "robots_disallowed")
+      .map((a) => ({
+        url: a.url,
+        depth: a.depth,
+        fetch_error: a.fetchError,
+      }));
   } else if (report === "structured_data") {
     rows = audits.map((a) => ({
       url: a.url,

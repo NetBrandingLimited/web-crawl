@@ -30,9 +30,10 @@ export async function GET(_req: Request, ctx: RouteCtx) {
     prisma.crawlQueue.count({ where: { jobId: id, state: "skipped" } }),
   ]);
 
-  const [fetchFailed, queueFailed] = await Promise.all([
+  const [fetchFailed, queueFailed, robotsSkipped] = await Promise.all([
     prisma.urlFetch.count({ where: { jobId: id, status: "error" } }),
     prisma.crawlQueue.count({ where: { jobId: id, state: "failed" } }),
+    prisma.crawlQueue.count({ where: { jobId: id, state: "skipped", lastError: "robots_disallowed" } }),
   ]);
   const failed = fetchFailed + queueFailed;
 
@@ -47,7 +48,7 @@ export async function GET(_req: Request, ctx: RouteCtx) {
       fetched,
       succeeded: done,
       failed,
-      disallowed: 0,
+      disallowed: robotsSkipped,
       from_sitemaps: 0,
       max_depth_reached: job.maxDepth,
     },

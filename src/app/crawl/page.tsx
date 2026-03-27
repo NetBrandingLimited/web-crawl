@@ -66,6 +66,7 @@ type CrawlSummaryResponse = {
     pagesWithMissingImageAlt: number;
     totalImagesMissingAlt: number;
     pagesWithJsonLd: number;
+    robotsTxtBlocked: number;
   };
 };
 
@@ -89,6 +90,7 @@ export default function CrawlPage() {
       { label: "Fetched", value: status.stats.fetched },
       { label: "Succeeded", value: status.stats.succeeded },
       { label: "Failed", value: status.stats.failed },
+      { label: "Robots.txt blocked", value: status.stats.disallowed },
     ];
   }, [status]);
 
@@ -204,6 +206,7 @@ export default function CrawlPage() {
       | "site_structure"
       | "url_issues"
       | "directives_audit"
+      | "robots_blocked"
       | "hreflang_audit"
       | "security_audit"
       | "content_quality"
@@ -407,6 +410,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("robots_blocked", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Robots blocked CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("structured_data", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -497,6 +508,7 @@ export default function CrawlPage() {
               <div>Pages w/ missing img alt: {reportSummary.pagesWithMissingImageAlt}</div>
               <div>Total images missing alt: {reportSummary.totalImagesMissingAlt}</div>
               <div>Pages with JSON-LD: {reportSummary.pagesWithJsonLd}</div>
+              <div>Robots.txt blocked: {reportSummary.robotsTxtBlocked}</div>
             </div>
           ) : null}
         </div>

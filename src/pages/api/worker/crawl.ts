@@ -1,5 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from "next"; 
+import type { NextApiRequest, NextApiResponse } from "next";
 import * as cheerio from "cheerio";
+import robotsParser from "robots-parser";
 import { prisma } from "@/lib/prisma";
 import { normalizeInputToUrl, sha1Hex } from "@/lib/crawl-url";
 
@@ -16,6 +17,40 @@ const FETCH_TIMEOUT_MS = Math.min(
   Math.max(1_000, parsePositiveInt(process.env.CRAWL_FETCH_TIMEOUT_MS, 8_000)),
 );
 const MAX_DISCOVERED_LINKS = parsePositiveInt(process.env.CRAWL_MAX_DISCOVERED_LINKS, 400);
+const ROBOTS_TXT_FETCH_MS = Math.min(
+  30_000,
+  Math.max(2_000, parsePositiveInt(process.env.CRAWL_ROBOTS_TIMEOUT_MS, 5_000)),
+);
+
+type RobotsParsed = ReturnType<typeof robotsParser>;
+
+async function getCachedRobots(
+  robotsTxtUrl: string,
+  userAgent: string,
+  cache: Map<string, RobotsParsed>,
+): Promise<RobotsParsed> {
+  const hit = cache.get(robotsTxtUrl);
+  if (hit) return hit;
+  const empty = robotsParser(robotsTxtUrl, "");
+  let parsed = empty;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ROBOTS_TXT_FETCH_MS);
+  try {
+    const res = await fetch(robotsTxtUrl, {
+      headers: { "user-agent": userAgent, accept: "text/plain,*/*;q=0.8" },
+      redirect: "follow",
+      signal: ctrl.signal,
+    });
+    const txt = await res.text();
+    parsed = robotsParser(robotsTxtUrl, txt);
+  } catch {
+    parsed = empty;
+  } finally {
+    clearTimeout(timer);
+  }
+  cache.set(robotsTxtUrl, parsed);
+  return parsed;
+}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -204,6 +239,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const results: { url: string; status: number; ok: boolean; error?: string }[] = [];
+  const robotsTxtCache = new Map<string, RobotsParsed>();
 
   for (const item of pending) {
     // Mark as in_progress
@@ -214,6 +250,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
       const requestedNormalized = normalizeUrl(item.url, item.job.stripTracking)?.toString() ?? item.url;
+
+      if (item.job.obeyRobots) {
+        let originForRobots: string | null = null;
+        const nu = normalizeUrl(item.url, item.job.stripTracking);
+        if (nu) {
+          originForRobots = `${nu.protocol}//${nu.host}`;
+        } else {
+          try {
+            const u = new URL(requestedNormalized);
+            if (u.protocol === "http:" || u.protocol === "https:") {
+              originForRobots = `${u.protocol}//${u.host}`;
+            }
+          } catch {
+            originForRobots = null;
+          }
+        }
+        if (originForRobots) {
+          const robotsTxtUrl = `${originForRobots}/robots.txt`;
+          const robots = await getCachedRobots(robotsTxtUrl, item.job.userAgent, robotsTxtCache);
+          const allowed = robots.isAllowed(requestedNormalized, item.job.userAgent) ?? true;
+          if (!allowed) {
+            await safeAuditWrite(() =>
+              prisma.crawlPageAudit.upsert({
+                where: { jobId_urlHash: { jobId: item.jobId, urlHash: item.urlHash } },
+                create: {
+                  jobId: item.jobId,
+                  urlHash: item.urlHash,
+                  url: requestedNormalized,
+                  depth: item.depth,
+                  fetchError: "robots_disallowed",
+                  fetchedAt: new Date(),
+                },
+                update: {
+                  url: requestedNormalized,
+                  depth: item.depth,
+                  fetchError: "robots_disallowed",
+                  httpStatus: null,
+                  fetchedAt: new Date(),
+                },
+              }),
+            );
+            await prisma.crawlQueue.update({
+              where: { id: item.id },
+              data: { state: "skipped", lastError: "robots_disallowed" },
+            });
+            results.push({ url: item.url, status: 0, ok: true, error: "robots_disallowed" });
+            continue;
+          }
+        }
+      }
+
       const fetchStartedAt = new Date();
       const result = await fetchWithRedirects(
         requestedNormalized,
