@@ -113,6 +113,7 @@ export async function GET(_req: Request, ctx: RouteCtx) {
     headers: {
       "content-type": "application/xml; charset=utf-8",
       "content-disposition": `attachment; filename="sitemap-${jobId}.xml"`,
+      "cache-control": "no-store, max-age=0, must-revalidate",
     },
   });
 }

@@ -1790,15 +1790,12 @@ export async function GET(req: Request, ctx: RouteCtx) {
       .filter((r) => String(r.issues).length > 0 || r.has_non_2xx || r.fetch_error);
   }
 
-  // Fallback for schema-drift / delayed audit writes:
-  // return discovered queue URLs so exports are still usable.
-  if (report !== "summary" && rows.length === 0 && queueRows.length > 0) {
-    rows = queueRows.map((q) => ({
-      url: q.url,
-      depth: q.depth,
-      queue_state: q.state,
-    }));
-    fallbackHeaders = ["url", "depth", "queue_state"];
+  // Note: we intentionally DO NOT fallback other reports to queue URLs.
+  // If an advanced report has zero audit-derived rows, exporting queue URLs
+  // would make every CSV look identical/misleading.
+  if (rows.length === 0 && (!fallbackHeaders || fallbackHeaders.length === 0)) {
+    // Ensure CSV/XLS always has at least basic headers.
+    fallbackHeaders = ["url", "depth"];
   }
 
   if (format === "excel") {
@@ -1808,6 +1805,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
       headers: {
         "content-type": "application/vnd.ms-excel; charset=utf-8",
         "content-disposition": `attachment; filename="${report}-${jobId}.xls"`,
+        "cache-control": "no-store, max-age=0, must-revalidate",
       },
     });
   }
@@ -1818,6 +1816,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
     headers: {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": `attachment; filename="${report}-${jobId}.csv"`,
+      "cache-control": "no-store, max-age=0, must-revalidate",
     },
   });
 }
