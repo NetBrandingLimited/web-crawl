@@ -168,6 +168,11 @@ type ExportReportKey =
   | "short_titles"
   | "low_word_count"
   | "orphan_candidates_strict"
+  | "missing_meta_descriptions"
+  | "short_meta_descriptions"
+  | "long_meta_descriptions"
+  | "canonical_with_fragment"
+  | "canonical_cross_domain"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -220,6 +225,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "short_titles", label: "Short Titles CSV" },
   { id: "low_word_count", label: "Low Word Count CSV" },
   { id: "orphan_candidates_strict", label: "Orphan Candidates (Strict) CSV" },
+  { id: "missing_meta_descriptions", label: "Missing Meta Descriptions CSV" },
+  { id: "short_meta_descriptions", label: "Short Meta Descriptions CSV" },
+  { id: "long_meta_descriptions", label: "Long Meta Descriptions CSV" },
+  { id: "canonical_with_fragment", label: "Canonical With Fragment CSV" },
+  { id: "canonical_cross_domain", label: "Canonical Cross-Domain CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

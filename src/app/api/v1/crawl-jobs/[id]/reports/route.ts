@@ -2192,6 +2192,127 @@ export async function GET(req: Request, ctx: RouteCtx) {
           reason: okStatus ? "zero_internal_inlinks_non_seed" : "zero_internal_inlinks_non_seed_non2xx",
         };
       });
+  } else if (report === "missing_meta_descriptions") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "meta_description"];
+    rows = audits
+      .filter((a) => !a.metaDesc)
+      .map((a) => ({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        meta_description: a.metaDesc,
+      }));
+  } else if (report === "short_meta_descriptions") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "meta_description",
+      "meta_description_length",
+      "recommended_min",
+      "title",
+    ];
+    rows = audits
+      .filter((a) => (a.metaDescLength ?? 0) > 0 && (a.metaDescLength ?? 0) < 50)
+      .map((a) => ({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        meta_description: a.metaDesc,
+        meta_description_length: a.metaDescLength,
+        recommended_min: 50,
+        title: a.title,
+      }));
+  } else if (report === "long_meta_descriptions") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "meta_description",
+      "meta_description_length",
+      "recommended_max",
+      "title",
+    ];
+    rows = audits
+      .filter((a) => (a.metaDescLength ?? 0) > 160)
+      .map((a) => ({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        meta_description: a.metaDesc,
+        meta_description_length: a.metaDescLength,
+        recommended_max: 160,
+        title: a.title,
+      }));
+  } else if (report === "canonical_with_fragment") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "canonical_raw",
+      "canonical_resolved",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!a.canonicalUrl) continue;
+      try {
+        const c = new URL(a.canonicalUrl, a.url);
+        if (!c.hash) continue;
+        out.push({
+          url: a.url,
+          depth: a.depth,
+          http_status: a.httpStatus,
+          canonical_raw: a.canonicalUrl,
+          canonical_resolved: c.toString(),
+          issue: "canonical_has_fragment",
+        });
+      } catch {
+        out.push({
+          url: a.url,
+          depth: a.depth,
+          http_status: a.httpStatus,
+          canonical_raw: a.canonicalUrl,
+          canonical_resolved: null,
+          issue: "canonical_invalid_url",
+        });
+      }
+    }
+    rows = out;
+  } else if (report === "canonical_cross_domain") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "canonical_raw",
+      "canonical_resolved",
+      "page_host",
+      "canonical_host",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!a.canonicalUrl) continue;
+      try {
+        const page = new URL(a.url);
+        const canonical = new URL(a.canonicalUrl, a.url);
+        if (page.host === canonical.host) continue;
+        out.push({
+          url: a.url,
+          depth: a.depth,
+          http_status: a.httpStatus,
+          canonical_raw: a.canonicalUrl,
+          canonical_resolved: canonical.toString(),
+          page_host: page.host,
+          canonical_host: canonical.host,
+          issue: "canonical_cross_domain",
+        });
+      } catch {
+        /* skip */
+      }
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);
