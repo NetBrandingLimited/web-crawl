@@ -3,6 +3,19 @@ import { prisma } from "@/lib/prisma";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
+function isSchemaDriftError(err: unknown): boolean {
+  const msg = String(err).toLowerCase();
+  return (
+    msg.includes("crawlpageaudit") ||
+    msg.includes("undefinedcolumn") ||
+    msg.includes("unknown column") ||
+    msg.includes("does not exist") ||
+    msg.includes("the column") ||
+    msg.includes("p2022") ||
+    msg.includes("relation")
+  );
+}
+
 function xmlEscape(v: string) {
   return v
     .replace(/&/g, "&amp;")
@@ -15,18 +28,31 @@ function xmlEscape(v: string) {
 export async function GET(_req: Request, ctx: RouteCtx) {
   const { id: jobId } = await ctx.params;
 
-  const rows = await prisma.crawlPageAudit.findMany({
-    where: { jobId },
-    select: {
-      url: true,
-      depth: true,
-      httpStatus: true,
-      robotsMeta: true,
-      xRobotsTag: true,
-      fetchedAt: true,
-    },
-    orderBy: [{ depth: "asc" }, { url: "asc" }],
-  });
+  let rows: Array<{
+    url: string;
+    depth: number;
+    httpStatus: number | null;
+    robotsMeta: string | null;
+    xRobotsTag: string | null;
+    fetchedAt: Date;
+  }> = [];
+  try {
+    rows = await prisma.crawlPageAudit.findMany({
+      where: { jobId },
+      select: {
+        url: true,
+        depth: true,
+        httpStatus: true,
+        robotsMeta: true,
+        xRobotsTag: true,
+        fetchedAt: true,
+      },
+      orderBy: [{ depth: "asc" }, { url: "asc" }],
+    });
+  } catch (err) {
+    if (!isSchemaDriftError(err)) throw err;
+    rows = [];
+  }
 
   const urls = rows.filter((r) => {
     const combined = `${r.robotsMeta ?? ""} ${r.xRobotsTag ?? ""}`.toLowerCase();
