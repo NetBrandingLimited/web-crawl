@@ -229,11 +229,10 @@ function isMissingAuditTableError(err: unknown): boolean {
     msg.includes("unknown column") ||
     (msg.includes("column") && msg.includes("does not exist"));
   const hasMissingTableSignal =
-    msg.includes("relation") ||
-    msg.includes("table") ||
-    (msg.includes("does not exist") && msg.includes("crawlpageaudit"));
-  const mentionsAuditModel = msg.includes("crawlpageaudit") || msg.includes("crawl page audit");
-  return hasMissingColumnSignal || hasMissingTableSignal || mentionsAuditModel;
+    (msg.includes("does not exist") && msg.includes("crawlpageaudit")) ||
+    (msg.includes("relation") && msg.includes("crawlpageaudit")) ||
+    (msg.includes("table") && msg.includes("crawlpageaudit"));
+  return hasMissingColumnSignal || hasMissingTableSignal;
 }
 
 async function safeAuditWrite<T>(op: () => Promise<T>): Promise<T | null> {
@@ -323,15 +322,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   urlHash: item.urlHash,
                   url: requestedNormalized,
                   depth: item.depth,
-                  fetchError: "robots_disallowed",
-                  fetchedAt: new Date(),
                 },
                 update: {
                   url: requestedNormalized,
                   depth: item.depth,
-                  fetchError: "robots_disallowed",
-                  httpStatus: null,
-                  fetchedAt: new Date(),
                 },
                 select: { id: true },
               }),
@@ -433,18 +427,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             urlHash,
             url: finalNormalized,
             depth: item.depth,
-            // Write only the minimal set of fields that are safe even during schema drift.
-            // Optional/migrated columns are applied in a follow-up update.
-            httpStatus: status,
-            contentType,
           },
           update: {
             url: finalNormalized,
             depth: item.depth,
-            httpStatus: status,
-            contentType,
-            fetchError: null,
-            fetchedAt: new Date(),
           },
           select: { id: true },
         }),
@@ -769,14 +755,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             urlHash: item.urlHash,
             url: item.url,
             depth: item.depth,
-            fetchError: String(err).slice(0, 500),
-            fetchedAt: new Date(),
           },
           update: {
             url: item.url,
             depth: item.depth,
-            fetchError: String(err).slice(0, 500),
-            fetchedAt: new Date(),
           },
           select: { id: true },
         }),
