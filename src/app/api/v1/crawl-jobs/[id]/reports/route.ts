@@ -68,8 +68,13 @@ function classifyIssues(row: {
   return issues;
 }
 
-function toDelimited(rows: Array<Record<string, unknown>>, delimiter: "," | "\t") {
+function toDelimited(
+  rows: Array<Record<string, unknown>>,
+  delimiter: "," | "\t",
+  fallbackHeaders?: string[],
+) {
   const headers = Object.keys(rows[0] ?? {});
+  const effectiveHeaders = headers.length > 0 ? headers : (fallbackHeaders ?? []);
   const escape = (v: unknown) => {
     const raw = String(v ?? "");
     if (delimiter === "\t") return raw.replace(/\t/g, " ");
@@ -78,9 +83,9 @@ function toDelimited(rows: Array<Record<string, unknown>>, delimiter: "," | "\t"
     }
     return raw;
   };
-  const lines = [headers.join(delimiter)];
+  const lines = [effectiveHeaders.join(delimiter)];
   for (const row of rows) {
-    lines.push(headers.map((h) => escape(row[h])).join(delimiter));
+    lines.push(effectiveHeaders.map((h) => escape(row[h])).join(delimiter));
   }
   return lines.join("\n");
 }
@@ -662,67 +667,188 @@ export async function GET(req: Request, ctx: RouteCtx) {
   }
 
   let rows: Array<Record<string, unknown>> = [];
+  let fallbackHeaders: string[] | undefined;
 
   if (report === "pages") {
-    rows = audits.map((a) => ({
-      url: a.url,
-      depth: a.depth,
-      http_status: a.httpStatus,
-      content_type: a.contentType,
-      title: a.title,
-      title_length: a.titleLength,
-      meta_description: a.metaDesc,
-      meta_description_length: a.metaDescLength,
-      og_title: a.ogTitle,
-      og_description: a.ogDescription,
-      og_image: a.ogImage,
-      twitter_card: a.twitterCard,
-      twitter_title: a.twitterTitle,
-      h1_count: a.h1Count,
-      h1_text: a.h1Text,
-      html_lang: a.htmlLang,
-      viewport_meta: a.viewportMeta,
-      charset_meta: a.charsetMeta,
-      h2_count: a.h2Count,
-      canonical_url: a.canonicalUrl,
-      robots_meta: a.robotsMeta,
-      x_robots_tag: a.xRobotsTag,
-      hreflang_count: a.hreflangCount,
-      json_ld_count: a.jsonLdCount,
-      json_ld_types: a.jsonLdTypesSummary,
-      links_out_count: a.linksOutCount,
-      links_external_count: a.linksExternalCount,
-      links_nofollow_count: a.linksNofollowCount,
-      links_mailto_count: a.linksMailtoCount,
-      links_tel_count: a.linksTelCount,
-      links_hash_only_count: a.linksHashOnlyCount,
-      pagination_next_url: a.paginationNextUrl,
-      pagination_prev_url: a.paginationPrevUrl,
-      amphtml_url: a.amphtmlUrl,
-      rss_feed_url: a.rssFeedUrl,
-      atom_feed_url: a.atomFeedUrl,
-      json_feed_url: a.jsonFeedUrl,
-      response_time_ms: a.responseTimeMs,
-      hsts: a.hstsHeader,
-      csp: a.cspHeader,
-      x_content_type_options: a.xContentTypeOptionsHeader,
-      x_frame_options: a.xFrameOptionsHeader,
-      referrer_policy: a.referrerPolicyHeader,
-      permissions_policy: a.permissionsPolicyHeader,
-      cache_control: a.cacheControlHeader,
-      last_modified: a.lastModifiedHeader,
-      etag: a.etagHeader,
-      content_encoding: a.contentEncodingHeader,
-      vary: a.varyHeader,
-      content_language: a.contentLanguageHeader,
-      favicon_url: a.faviconUrl,
-      meta_refresh: a.metaRefreshContent,
-      img_count: a.imgCount,
-      img_missing_alt_count: a.imgMissingAltCount,
-      word_count: a.wordCount,
-      fetched_at: a.fetchedAt.toISOString(),
-      fetch_error: a.fetchError,
-    }));
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "content_type",
+      "title",
+      "title_length",
+      "meta_description",
+      "meta_description_length",
+      "og_title",
+      "og_description",
+      "og_image",
+      "twitter_card",
+      "twitter_title",
+      "h1_count",
+      "h1_text",
+      "html_lang",
+      "viewport_meta",
+      "charset_meta",
+      "h2_count",
+      "canonical_url",
+      "robots_meta",
+      "x_robots_tag",
+      "hreflang_count",
+      "json_ld_count",
+      "json_ld_types",
+      "links_out_count",
+      "links_external_count",
+      "links_nofollow_count",
+      "links_mailto_count",
+      "links_tel_count",
+      "links_hash_only_count",
+      "pagination_next_url",
+      "pagination_prev_url",
+      "amphtml_url",
+      "rss_feed_url",
+      "atom_feed_url",
+      "json_feed_url",
+      "response_time_ms",
+      "hsts",
+      "csp",
+      "x_content_type_options",
+      "x_frame_options",
+      "referrer_policy",
+      "permissions_policy",
+      "cache_control",
+      "last_modified",
+      "etag",
+      "content_encoding",
+      "vary",
+      "content_language",
+      "favicon_url",
+      "meta_refresh",
+      "img_count",
+      "img_missing_alt_count",
+      "word_count",
+      "fetched_at",
+      "fetch_error",
+    ];
+    rows =
+      audits.length > 0
+        ? audits.map((a) => ({
+            url: a.url,
+            depth: a.depth,
+            http_status: a.httpStatus,
+            content_type: a.contentType,
+            title: a.title,
+            title_length: a.titleLength,
+            meta_description: a.metaDesc,
+            meta_description_length: a.metaDescLength,
+            og_title: a.ogTitle,
+            og_description: a.ogDescription,
+            og_image: a.ogImage,
+            twitter_card: a.twitterCard,
+            twitter_title: a.twitterTitle,
+            h1_count: a.h1Count,
+            h1_text: a.h1Text,
+            html_lang: a.htmlLang,
+            viewport_meta: a.viewportMeta,
+            charset_meta: a.charsetMeta,
+            h2_count: a.h2Count,
+            canonical_url: a.canonicalUrl,
+            robots_meta: a.robotsMeta,
+            x_robots_tag: a.xRobotsTag,
+            hreflang_count: a.hreflangCount,
+            json_ld_count: a.jsonLdCount,
+            json_ld_types: a.jsonLdTypesSummary,
+            links_out_count: a.linksOutCount,
+            links_external_count: a.linksExternalCount,
+            links_nofollow_count: a.linksNofollowCount,
+            links_mailto_count: a.linksMailtoCount,
+            links_tel_count: a.linksTelCount,
+            links_hash_only_count: a.linksHashOnlyCount,
+            pagination_next_url: a.paginationNextUrl,
+            pagination_prev_url: a.paginationPrevUrl,
+            amphtml_url: a.amphtmlUrl,
+            rss_feed_url: a.rssFeedUrl,
+            atom_feed_url: a.atomFeedUrl,
+            json_feed_url: a.jsonFeedUrl,
+            response_time_ms: a.responseTimeMs,
+            hsts: a.hstsHeader,
+            csp: a.cspHeader,
+            x_content_type_options: a.xContentTypeOptionsHeader,
+            x_frame_options: a.xFrameOptionsHeader,
+            referrer_policy: a.referrerPolicyHeader,
+            permissions_policy: a.permissionsPolicyHeader,
+            cache_control: a.cacheControlHeader,
+            last_modified: a.lastModifiedHeader,
+            etag: a.etagHeader,
+            content_encoding: a.contentEncodingHeader,
+            vary: a.varyHeader,
+            content_language: a.contentLanguageHeader,
+            favicon_url: a.faviconUrl,
+            meta_refresh: a.metaRefreshContent,
+            img_count: a.imgCount,
+            img_missing_alt_count: a.imgMissingAltCount,
+            word_count: a.wordCount,
+            fetched_at: a.fetchedAt.toISOString(),
+            fetch_error: a.fetchError,
+          }))
+        : queueRows.map((q) => ({
+            url: q.url,
+            depth: q.depth,
+            http_status: null,
+            content_type: null,
+            title: null,
+            title_length: null,
+            meta_description: null,
+            meta_description_length: null,
+            og_title: null,
+            og_description: null,
+            og_image: null,
+            twitter_card: null,
+            twitter_title: null,
+            h1_count: null,
+            h1_text: null,
+            html_lang: null,
+            viewport_meta: null,
+            charset_meta: null,
+            h2_count: null,
+            canonical_url: null,
+            robots_meta: null,
+            x_robots_tag: null,
+            hreflang_count: null,
+            json_ld_count: null,
+            json_ld_types: null,
+            links_out_count: null,
+            links_external_count: null,
+            links_nofollow_count: null,
+            links_mailto_count: null,
+            links_tel_count: null,
+            links_hash_only_count: null,
+            pagination_next_url: null,
+            pagination_prev_url: null,
+            amphtml_url: null,
+            rss_feed_url: null,
+            atom_feed_url: null,
+            json_feed_url: null,
+            response_time_ms: null,
+            hsts: null,
+            csp: null,
+            x_content_type_options: null,
+            x_frame_options: null,
+            referrer_policy: null,
+            permissions_policy: null,
+            cache_control: null,
+            last_modified: null,
+            etag: null,
+            content_encoding: null,
+            vary: null,
+            content_language: null,
+            favicon_url: null,
+            meta_refresh: null,
+            img_count: null,
+            img_missing_alt_count: null,
+            word_count: null,
+            fetched_at: null,
+            fetch_error: null,
+          }));
   } else if (report === "duplicates") {
     const rowsOut: Array<Record<string, unknown>> = [];
     // Keep a stable schema for CSV/Excel by always emitting the same columns.
@@ -1596,7 +1722,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
   }
 
   if (format === "excel") {
-    const content = toDelimited(rows, "\t");
+    const content = toDelimited(rows, "\t", fallbackHeaders);
     return new NextResponse(content, {
       status: 200,
       headers: {
@@ -1606,7 +1732,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
     });
   }
 
-  const csv = toDelimited(rows, ",");
+  const csv = toDelimited(rows, ",", fallbackHeaders);
   return new NextResponse(csv, {
     status: 200,
     headers: {
