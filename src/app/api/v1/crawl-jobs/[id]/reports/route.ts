@@ -1405,6 +1405,16 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
   } else if (report === "canonical_orphans") {
+    fallbackHeaders = [
+      "orphan_canonical_target_key",
+      "orphan_canonical_target_url",
+      "pages_pointing_to_orphan_target",
+      "url",
+      "canonical_raw",
+      "http_status",
+      "depth",
+      "title",
+    ];
     const pagesByKey = new Map<string, (typeof audits)[number]>();
     for (const a of audits) {
       try {
