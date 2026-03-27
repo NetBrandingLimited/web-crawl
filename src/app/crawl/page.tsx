@@ -89,6 +89,11 @@ type CrawlSummaryResponse = {
     pagesWithJsonLd: number;
     robotsTxtBlocked: number;
     avgResponseTimeMs: number;
+    responseLt500ms: number;
+    response500To1000ms: number;
+    response1To3s: number;
+    response3To5s: number;
+    responseGt5s: number;
     slowResponsePages: number;
     pagesWithExternalLinks: number;
     pagesMissingOgTitle: number;
@@ -153,6 +158,7 @@ type ExportReportKey =
   | "top_directories"
   | "url_extensions"
   | "http_status_distribution"
+  | "response_time_buckets"
   | "url_issues"
   | "parameter_variants"
   | "indexability_audit"
@@ -196,6 +202,7 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "top_directories", label: "Top Directories CSV" },
   { id: "url_extensions", label: "URL Extensions CSV" },
   { id: "http_status_distribution", label: "HTTP Status Distribution CSV" },
+  { id: "response_time_buckets", label: "Response Time Buckets CSV" },
   { id: "url_issues", label: "URL Issues CSV" },
   { id: "parameter_variants", label: "Parameter Variants CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
@@ -531,6 +538,11 @@ export default function CrawlPage() {
               <div>Pages with JSON-LD: {reportSummary.pagesWithJsonLd}</div>
               <div>Robots.txt blocked: {reportSummary.robotsTxtBlocked}</div>
               <div>Avg response (ms): {reportSummary.avgResponseTimeMs}</div>
+              <div>Response &lt;500ms: {reportSummary.responseLt500ms}</div>
+              <div>Response 500ms-1s: {reportSummary.response500To1000ms}</div>
+              <div>Response 1s-3s: {reportSummary.response1To3s}</div>
+              <div>Response 3s-5s: {reportSummary.response3To5s}</div>
+              <div>Response &gt;5s: {reportSummary.responseGt5s}</div>
               <div>Slow pages (≥3s): {reportSummary.slowResponsePages}</div>
               <div>Pages w/ external links: {reportSummary.pagesWithExternalLinks}</div>
               <div>HTML 2xx missing og:title: {reportSummary.pagesMissingOgTitle}</div>

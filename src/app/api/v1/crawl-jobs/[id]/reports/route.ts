@@ -680,6 +680,11 @@ export async function GET(req: Request, ctx: RouteCtx) {
       .filter((ms): ms is number => ms != null && ms >= 0);
     const avgResponseTimeMs =
       timings.length > 0 ? Math.round(timings.reduce((s, n) => s + n, 0) / timings.length) : 0;
+    const responseLt500ms = timings.filter((ms) => ms < 500).length;
+    const response500To1000ms = timings.filter((ms) => ms >= 500 && ms < 1000).length;
+    const response1To3s = timings.filter((ms) => ms >= 1000 && ms < 3000).length;
+    const response3To5s = timings.filter((ms) => ms >= 3000 && ms < 5000).length;
+    const responseGt5s = timings.filter((ms) => ms >= 5000).length;
     const slowResponsePages = audits.filter(
       (a) =>
         a.responseTimeMs != null &&
@@ -795,6 +800,11 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagesWithJsonLd,
         robotsTxtBlocked,
         avgResponseTimeMs,
+        responseLt500ms,
+        response500To1000ms,
+        response1To3s,
+        response3To5s,
+        responseGt5s,
         slowResponsePages,
         pagesWithExternalLinks,
         pagesMissingOgTitle,
@@ -1826,6 +1836,46 @@ export async function GET(req: Request, ctx: RouteCtx) {
         const bc = (b.status_code as number | null) ?? 0;
         return ac - bc;
       });
+  } else if (report === "response_time_buckets") {
+    fallbackHeaders = ["response_time_bucket", "url_count", "share_percent", "sample_urls"];
+    const timingByUrl = new Map<string, number>();
+    for (const a of audits) {
+      if (a.responseTimeMs != null && a.responseTimeMs >= 0) timingByUrl.set(a.url, a.responseTimeMs);
+    }
+    const urls = queueRows.length > 0 ? queueRows.map((q) => q.url) : fetchRows.map((f) => f.requestedUrl);
+    const buckets = new Map<string, { count: number; samples: string[] }>([
+      ["lt_500ms", { count: 0, samples: [] }],
+      ["500ms_to_1s", { count: 0, samples: [] }],
+      ["1s_to_3s", { count: 0, samples: [] }],
+      ["3s_to_5s", { count: 0, samples: [] }],
+      ["gt_5s", { count: 0, samples: [] }],
+      ["unknown", { count: 0, samples: [] }],
+    ]);
+    const bucketOf = (ms: number | null) => {
+      if (ms == null || ms < 0) return "unknown";
+      if (ms < 500) return "lt_500ms";
+      if (ms < 1000) return "500ms_to_1s";
+      if (ms < 3000) return "1s_to_3s";
+      if (ms < 5000) return "3s_to_5s";
+      return "gt_5s";
+    };
+    for (const url of urls) {
+      const bucket = bucketOf(timingByUrl.get(url) ?? null);
+      const hit = buckets.get(bucket)!;
+      hit.count += 1;
+      if (hit.samples.length < 5) hit.samples.push(url);
+    }
+    const total = Math.max(1, urls.length);
+    const ordered = ["lt_500ms", "500ms_to_1s", "1s_to_3s", "3s_to_5s", "gt_5s", "unknown"];
+    rows = ordered.map((bucket) => {
+      const hit = buckets.get(bucket)!;
+      return {
+        response_time_bucket: bucket,
+        url_count: hit.count,
+        share_percent: Math.round((hit.count / total) * 10000) / 100,
+        sample_urls: hit.samples.join("|"),
+      };
+    });
   } else if (report === "url_issues") {
     rows = queueRows.map((q) => {
       const issues: string[] = [];
