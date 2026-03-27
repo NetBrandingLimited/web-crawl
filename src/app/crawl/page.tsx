@@ -146,6 +146,7 @@ type ExportReportKey =
   | "duplicate_meta_descriptions"
   | "near_duplicates"
   | "canonical_audit"
+  | "canonical_status_conflicts"
   | "canonical_clusters"
   | "canonical_loops"
   | "canonical_orphans"
@@ -190,6 +191,7 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "duplicate_meta_descriptions", label: "Duplicate Meta CSV" },
   { id: "near_duplicates", label: "Near Duplicates CSV" },
   { id: "canonical_audit", label: "Canonical Audit CSV" },
+  { id: "canonical_status_conflicts", label: "Canonical Status Conflicts CSV" },
   { id: "canonical_clusters", label: "Canonical Clusters CSV" },
   { id: "canonical_loops", label: "Canonical Loops CSV" },
   { id: "canonical_orphans", label: "Canonical Orphans CSV" },
