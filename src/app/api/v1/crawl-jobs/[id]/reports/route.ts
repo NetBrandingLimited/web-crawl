@@ -346,6 +346,13 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const pagesMissingHtmlLang = html2xxAudits.filter((a) => !a.htmlLang).length;
     const pagesMissingViewport = html2xxAudits.filter((a) => !a.viewportMeta).length;
     const pagesWithNofollowLinks = audits.filter((a) => a.linksNofollowCount > 0).length;
+    const pagesWithRelNext = audits.filter((a) => !!a.paginationNextUrl).length;
+    const pagesWithRelPrev = audits.filter((a) => !!a.paginationPrevUrl).length;
+    const pagesWithMailtoLinks = audits.filter((a) => a.linksMailtoCount > 0).length;
+    const pagesWithTelLinks = audits.filter((a) => a.linksTelCount > 0).length;
+    const totalMailtoLinks = audits.reduce((s, a) => s + a.linksMailtoCount, 0);
+    const totalTelLinks = audits.reduce((s, a) => s + a.linksTelCount, 0);
+    const totalHashOnlyLinks = audits.reduce((s, a) => s + a.linksHashOnlyCount, 0);
     const https2xxAudits = audits.filter(isHttps2xxAudit);
     const httpsMissingHsts = https2xxAudits.filter((a) => !a.hstsHeader).length;
     const httpsMissingXContentTypeOptions = https2xxAudits.filter(
@@ -410,6 +417,13 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagesMissingHtmlLang,
         pagesMissingViewport,
         pagesWithNofollowLinks,
+        pagesWithRelNext,
+        pagesWithRelPrev,
+        pagesWithMailtoLinks,
+        pagesWithTelLinks,
+        totalMailtoLinks,
+        totalTelLinks,
+        totalHashOnlyLinks,
         httpsMissingHsts,
         httpsMissingXContentTypeOptions,
         httpsMissingXFrameOptions,
@@ -450,6 +464,11 @@ export async function GET(req: Request, ctx: RouteCtx) {
       links_out_count: a.linksOutCount,
       links_external_count: a.linksExternalCount,
       links_nofollow_count: a.linksNofollowCount,
+      links_mailto_count: a.linksMailtoCount,
+      links_tel_count: a.linksTelCount,
+      links_hash_only_count: a.linksHashOnlyCount,
+      pagination_next_url: a.paginationNextUrl,
+      pagination_prev_url: a.paginationPrevUrl,
       response_time_ms: a.responseTimeMs,
       hsts: a.hstsHeader,
       csp: a.cspHeader,
@@ -997,6 +1016,16 @@ export async function GET(req: Request, ctx: RouteCtx) {
       referrer_policy: a.referrerPolicyHeader,
       permissions_policy: a.permissionsPolicyHeader,
     }));
+  } else if (report === "pagination") {
+    rows = audits
+      .filter((a) => a.paginationNextUrl || a.paginationPrevUrl)
+      .map((a) => ({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        pagination_next_url: a.paginationNextUrl,
+        pagination_prev_url: a.paginationPrevUrl,
+      }));
   } else if (report === "social_meta") {
     rows = audits.map((a) => ({
       url: a.url,
@@ -1022,7 +1051,27 @@ export async function GET(req: Request, ctx: RouteCtx) {
       links_out_count: a.linksOutCount,
       links_external_count: a.linksExternalCount,
       links_nofollow_count: a.linksNofollowCount,
+      links_mailto_count: a.linksMailtoCount,
+      links_tel_count: a.linksTelCount,
+      links_hash_only_count: a.linksHashOnlyCount,
+      pagination_next_url: a.paginationNextUrl,
+      pagination_prev_url: a.paginationPrevUrl,
       word_count: a.wordCount,
+    }));
+  } else if (report === "link_breakdown") {
+    rows = audits.map((a) => ({
+      url: a.url,
+      depth: a.depth,
+      http_status: a.httpStatus,
+      content_type: a.contentType,
+      links_out_count: a.linksOutCount,
+      links_external_count: a.linksExternalCount,
+      links_nofollow_count: a.linksNofollowCount,
+      links_mailto_count: a.linksMailtoCount,
+      links_tel_count: a.linksTelCount,
+      links_hash_only_count: a.linksHashOnlyCount,
+      pagination_next_url: a.paginationNextUrl,
+      pagination_prev_url: a.paginationPrevUrl,
     }));
   } else if (report === "robots_blocked") {
     rows = audits

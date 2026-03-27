@@ -518,13 +518,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const h2Count = $("h2").length;
         const hreflangCount = $("link[rel='alternate'][hreflang]").length;
         const linksOutCount = $("a[href]").length;
+        let paginationNextUrl: string | null = null;
+        let paginationPrevUrl: string | null = null;
+        $("link[href][rel]").each((_, el) => {
+          const r = $(el).attr("rel");
+          const hrefRaw = $(el).attr("href");
+          const href = hrefRaw?.trim();
+          if (!href) return;
+          const tokens = (r ?? "")
+            .toLowerCase()
+            .split(/\s+/)
+            .filter(Boolean);
+          if (!paginationNextUrl && tokens.includes("next")) {
+            paginationNextUrl = absolutizeMetaUrl(href, item.url, 2048);
+          }
+          if (!paginationPrevUrl && (tokens.includes("prev") || tokens.includes("previous"))) {
+            paginationPrevUrl = absolutizeMetaUrl(href, item.url, 2048);
+          }
+        });
         const seedHost = new URL(item.job.seedUrl).hostname.toLowerCase();
         let linksExternalCount = 0;
         let linksNofollowCount = 0;
+        let linksMailtoCount = 0;
+        let linksTelCount = 0;
+        let linksHashOnlyCount = 0;
         $("a[href]").each((_, el) => {
           try {
-            const href = $(el).attr("href");
-            if (href == null || href === "") return;
+            const rawHref = $(el).attr("href");
+            if (rawHref == null || rawHref === "") return;
+            const href = rawHref.trim();
+            const lower = href.toLowerCase();
+            if (lower.startsWith("mailto:")) {
+              linksMailtoCount += 1;
+              return;
+            }
+            if (lower.startsWith("tel:")) {
+              linksTelCount += 1;
+              return;
+            }
+            if (href === "#" || href.startsWith("#")) {
+              linksHashOnlyCount += 1;
+              return;
+            }
             const rel = $(el).attr("rel");
             if (rel) {
               const parts = rel.toLowerCase().split(/\s+/).filter(Boolean);
@@ -590,6 +625,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               linksOutCount,
               linksExternalCount,
               linksNofollowCount,
+              linksMailtoCount,
+              linksTelCount,
+              linksHashOnlyCount,
+              paginationNextUrl,
+              paginationPrevUrl,
               imgCount,
               imgMissingAltCount,
               jsonLdCount,
@@ -610,6 +650,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               jsonLdTypesSummary: null,
               linksExternalCount: 0,
               linksNofollowCount: 0,
+              linksMailtoCount: 0,
+              linksTelCount: 0,
+              linksHashOnlyCount: 0,
+              paginationNextUrl: null,
+              paginationPrevUrl: null,
               htmlLang: null,
               viewportMeta: null,
               charsetMeta: null,

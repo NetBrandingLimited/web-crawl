@@ -77,6 +77,13 @@ type CrawlSummaryResponse = {
     pagesMissingHtmlLang: number;
     pagesMissingViewport: number;
     pagesWithNofollowLinks: number;
+    pagesWithRelNext: number;
+    pagesWithRelPrev: number;
+    pagesWithMailtoLinks: number;
+    pagesWithTelLinks: number;
+    totalMailtoLinks: number;
+    totalTelLinks: number;
+    totalHashOnlyLinks: number;
     httpsMissingHsts: number;
     httpsMissingXContentTypeOptions: number;
     httpsMissingXFrameOptions: number;
@@ -227,6 +234,8 @@ export default function CrawlPage() {
       | "security_headers"
       | "content_quality"
       | "performance"
+      | "link_breakdown"
+      | "pagination"
       | "social_meta"
       | "structured_data"
       | "images"
@@ -492,6 +501,22 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("link_breakdown", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Link breakdown CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("pagination", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Pagination CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("social_meta", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -569,6 +594,13 @@ export default function CrawlPage() {
               <div>HTML 2xx missing lang: {reportSummary.pagesMissingHtmlLang}</div>
               <div>HTML 2xx missing viewport: {reportSummary.pagesMissingViewport}</div>
               <div>Pages w/ nofollow links: {reportSummary.pagesWithNofollowLinks}</div>
+              <div>Pages w/ rel=next: {reportSummary.pagesWithRelNext}</div>
+              <div>Pages w/ rel=prev: {reportSummary.pagesWithRelPrev}</div>
+              <div>Pages w/ mailto: {reportSummary.pagesWithMailtoLinks}</div>
+              <div>Pages w/ tel: {reportSummary.pagesWithTelLinks}</div>
+              <div>Total mailto links: {reportSummary.totalMailtoLinks}</div>
+              <div>Total tel links: {reportSummary.totalTelLinks}</div>
+              <div>Total hash-only links: {reportSummary.totalHashOnlyLinks}</div>
               <div>HTTPS 2xx missing HSTS: {reportSummary.httpsMissingHsts}</div>
               <div>HTTPS 2xx missing X-Content-Type-Options: {reportSummary.httpsMissingXContentTypeOptions}</div>
               <div>HTTPS 2xx missing X-Frame-Options: {reportSummary.httpsMissingXFrameOptions}</div>
