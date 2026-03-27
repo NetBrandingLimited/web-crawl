@@ -79,6 +79,11 @@ model CrawlPageAudit {
   titleLength   Int?
   metaDesc      String?
   metaDescLength Int?
+  ogTitle       String?  @db.VarChar(512)
+  ogDescription String?  @db.Text
+  ogImage       String?  @db.VarChar(2048)
+  twitterCard   String?  @db.VarChar(64)
+  twitterTitle  String?  @db.VarChar(512)
   h1Count       Int      @default(0)
   h2Count       Int      @default(0)
   canonicalUrl  String?  @db.VarChar(2048)

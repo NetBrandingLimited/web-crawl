@@ -109,6 +109,12 @@ function robotsDirectiveTokens(meta: string | null, xRobots: string | null): str
         .filter(Boolean);
 }
 
+function isHtml2xxAudit(a: { contentType: string | null; httpStatus: number | null }) {
+  const ct = (a.contentType ?? "").toLowerCase();
+  const st = a.httpStatus;
+  return ct.includes("text/html") && st != null && st >= 200 && st < 300;
+}
+
 export async function GET(req: Request, ctx: RouteCtx) {
   const { id: jobId } = await ctx.params;
   const { searchParams } = new URL(req.url);
@@ -258,6 +264,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
         a.httpStatus < 300,
     ).length;
     const pagesWithExternalLinks = audits.filter((a) => a.linksExternalCount > 0).length;
+    const html2xxAudits = audits.filter(isHtml2xxAudit);
+    const pagesMissingOgTitle = html2xxAudits.filter((a) => !a.ogTitle).length;
+    const pagesWithOgImage = html2xxAudits.filter((a) => !!a.ogImage).length;
+    const pagesMissingTwitterCard = html2xxAudits.filter((a) => !a.twitterCard).length;
     const securityIssues = audits.filter((a) => {
       const issues: string[] = [];
       try {
@@ -332,6 +342,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         avgResponseTimeMs,
         slowResponsePages,
         pagesWithExternalLinks,
+        pagesMissingOgTitle,
+        pagesWithOgImage,
+        pagesMissingTwitterCard,
       },
     });
   }
@@ -348,6 +361,11 @@ export async function GET(req: Request, ctx: RouteCtx) {
       title_length: a.titleLength,
       meta_description: a.metaDesc,
       meta_description_length: a.metaDescLength,
+      og_title: a.ogTitle,
+      og_description: a.ogDescription,
+      og_image: a.ogImage,
+      twitter_card: a.twitterCard,
+      twitter_title: a.twitterTitle,
       h1_count: a.h1Count,
       h2_count: a.h2Count,
       canonical_url: a.canonicalUrl,
@@ -865,6 +883,21 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = chainRows;
+  } else if (report === "social_meta") {
+    rows = audits.map((a) => ({
+      url: a.url,
+      depth: a.depth,
+      http_status: a.httpStatus,
+      content_type: a.contentType,
+      title: a.title,
+      og_title: a.ogTitle,
+      og_description: a.ogDescription,
+      og_image: a.ogImage,
+      twitter_card: a.twitterCard,
+      twitter_title: a.twitterTitle,
+      missing_og_title: isHtml2xxAudit(a) && !a.ogTitle,
+      missing_twitter_card: isHtml2xxAudit(a) && !a.twitterCard,
+    }));
   } else if (report === "performance") {
     rows = audits.map((a) => ({
       url: a.url,

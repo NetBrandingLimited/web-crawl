@@ -98,11 +98,28 @@ function cleanText(v: string | undefined | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function capLen(s: string | null, max: number): string | null {
+  if (!s) return null;
+  return s.length > max ? s.slice(0, max) : s;
+}
+
 /** Normalize HTTP header (e.g. X-Robots-Tag) for storage; cap length for VARCHAR. */
 function cleanHeaderValue(v: string | null, maxLen: number): string | null {
   const t = cleanText(v);
   if (!t) return null;
   return t.length > maxLen ? t.slice(0, maxLen) : t;
+}
+
+/** Resolve meta URL/content relative to page URL; cap length for VARCHAR columns. */
+function absolutizeMetaUrl(raw: string | undefined | null, pageUrl: string, maxLen: number): string | null {
+  const t = cleanText(raw);
+  if (!t) return null;
+  try {
+    const abs = new URL(t, pageUrl).toString();
+    return abs.length > maxLen ? abs.slice(0, maxLen) : abs;
+  } catch {
+    return t.length > maxLen ? t.slice(0, maxLen) : t;
+  }
 }
 
 function collectJsonLdTypes(node: unknown, types: Set<string>): void {
@@ -458,6 +475,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const title = cleanText($("head > title").first().text());
         const metaDesc = cleanText($("meta[name='description']").attr("content"));
+        const ogTitle = capLen(cleanText($('meta[property="og:title"]').attr("content")), 512);
+        const ogDescription = capLen(cleanText($('meta[property="og:description"]').attr("content")), 16_384);
+        const ogImage = absolutizeMetaUrl($('meta[property="og:image"]').attr("content"), item.url, 2048);
+        const twitterCard = capLen(cleanText($('meta[name="twitter:card"]').attr("content")), 64);
+        const twitterTitle = capLen(cleanText($('meta[name="twitter:title"]').attr("content")), 512);
         const canonicalUrl = cleanText($("link[rel='canonical']").attr("href"));
         const robotsMeta = cleanText($("meta[name='robots']").attr("content"));
         const h1Count = $("h1").length;
@@ -512,6 +534,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               titleLength: title?.length ?? null,
               metaDesc,
               metaDescLength: metaDesc?.length ?? null,
+              ogTitle,
+              ogDescription,
+              ogImage,
+              twitterCard,
+              twitterTitle,
               h1Count,
               h2Count,
               canonicalUrl,
@@ -539,6 +566,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               jsonLdCount: 0,
               jsonLdTypesSummary: null,
               linksExternalCount: 0,
+              ogTitle: null,
+              ogDescription: null,
+              ogImage: null,
+              twitterCard: null,
+              twitterTitle: null,
               fetchedAt: new Date(),
             },
           }),
