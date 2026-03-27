@@ -85,6 +85,8 @@ model CrawlPageAudit {
   robotsMeta    String?  @db.VarChar(512)
   hreflangCount Int      @default(0)
   linksOutCount Int      @default(0)
+  imgCount           Int @default(0)
+  imgMissingAltCount Int @default(0)
   wordCount     Int      @default(0)
   contentHash   String?  @db.Char(40)
   fetchedAt     DateTime @default(now())

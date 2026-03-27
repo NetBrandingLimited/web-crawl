@@ -283,55 +283,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }),
       );
 
-      // Parse HTML and discover new URLs
-      if (contentType.includes("text/html") && item.depth < item.job.maxDepth) {
+      // Parse HTML for audit on every HTML response; enqueue links only under max depth.
+      if (contentType.includes("text/html")) {
         const html = result.body ? result.body.toString("utf8") : "";
         const $ = cheerio.load(html);
-        const seedUrl = new URL(item.job.seedUrl);
-        const discovered: string[] = [];
 
-        $("a[href]").each((_, el) => {
-          try {
-            const href = $(el).attr("href")!;
-            const abs = new URL(href, item.url);
-            if (item.job.sameSiteOnly && abs.hostname !== seedUrl.hostname) return;
-            if (!["http:", "https:"].includes(abs.protocol)) return;
-            abs.hash = "";
-            discovered.push(abs.toString());
-          } catch {
-            // ignore malformed URLs
-          }
-        });
+        if (item.depth < item.job.maxDepth) {
+          const seedUrl = new URL(item.job.seedUrl);
+          const discovered: string[] = [];
 
-        const seenHashes = new Set<string>();
-        const toEnqueue: { url: string; urlHash: string }[] = [];
-        for (const u of discovered) {
-          const h = sha1Hex(u);
-          if (seenHashes.has(h)) continue;
-          seenHashes.add(h);
-          toEnqueue.push({ url: u, urlHash: h });
-          if (toEnqueue.length >= MAX_DISCOVERED_LINKS) break;
-        }
-
-        const now = new Date();
-        const queuedSoFar = await prisma.crawlQueue.count({ where: { jobId: item.jobId } });
-        const room = item.job.maxPages - queuedSoFar;
-        const allowedNew = Math.max(0, Math.min(room, toEnqueue.length));
-        const slice = allowedNew > 0 ? toEnqueue.slice(0, allowedNew) : [];
-
-        if (slice.length > 0) {
-          await prisma.crawlQueue.createMany({
-            data: slice.map((row) => ({
-              jobId: item.jobId,
-              urlHash: row.urlHash,
-              url: row.url,
-              depth: item.depth + 1,
-              state: "pending",
-              priority: 0,
-              availableAt: now,
-            })),
-            skipDuplicates: true,
+          $("a[href]").each((_, el) => {
+            try {
+              const href = $(el).attr("href")!;
+              const abs = new URL(href, item.url);
+              if (item.job.sameSiteOnly && abs.hostname !== seedUrl.hostname) return;
+              if (!["http:", "https:"].includes(abs.protocol)) return;
+              abs.hash = "";
+              discovered.push(abs.toString());
+            } catch {
+              // ignore malformed URLs
+            }
           });
+
+          const seenHashes = new Set<string>();
+          const toEnqueue: { url: string; urlHash: string }[] = [];
+          for (const u of discovered) {
+            const h = sha1Hex(u);
+            if (seenHashes.has(h)) continue;
+            seenHashes.add(h);
+            toEnqueue.push({ url: u, urlHash: h });
+            if (toEnqueue.length >= MAX_DISCOVERED_LINKS) break;
+          }
+
+          const now = new Date();
+          const queuedSoFar = await prisma.crawlQueue.count({ where: { jobId: item.jobId } });
+          const room = item.job.maxPages - queuedSoFar;
+          const allowedNew = Math.max(0, Math.min(room, toEnqueue.length));
+          const slice = allowedNew > 0 ? toEnqueue.slice(0, allowedNew) : [];
+
+          if (slice.length > 0) {
+            await prisma.crawlQueue.createMany({
+              data: slice.map((row) => ({
+                jobId: item.jobId,
+                urlHash: row.urlHash,
+                url: row.url,
+                depth: item.depth + 1,
+                state: "pending",
+                priority: 0,
+                availableAt: now,
+              })),
+              skipDuplicates: true,
+            });
+          }
         }
 
         const title = cleanText($("head > title").first().text());
@@ -342,6 +345,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const h2Count = $("h2").length;
         const hreflangCount = $("link[rel='alternate'][hreflang]").length;
         const linksOutCount = $("a[href]").length;
+        const imgCount = $("img").length;
+        let imgMissingAltCount = 0;
+        $("img").each((_, el) => {
+          if ($(el).attr("alt") === undefined) imgMissingAltCount += 1;
+        });
         const bodyText = cleanText($("body").text()) ?? "";
         const wordCount = bodyText.length === 0 ? 0 : bodyText.split(" ").length;
         const contentHash = bodyText.length > 0 ? sha1Hex(bodyText.toLowerCase()) : null;
@@ -360,6 +368,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               robotsMeta,
               hreflangCount,
               linksOutCount,
+              imgCount,
+              imgMissingAltCount,
               wordCount,
               contentHash,
               fetchedAt: new Date(),

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "CrawlPageAudit" ADD COLUMN "imgCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "CrawlPageAudit" ADD COLUMN "imgMissingAltCount" INTEGER NOT NULL DEFAULT 0;

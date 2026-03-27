@@ -63,6 +63,8 @@ type CrawlSummaryResponse = {
     contentQualityIssues: number;
     brokenLinksWithSources: number;
     redirectChainIssues: number;
+    pagesWithMissingImageAlt: number;
+    totalImagesMissingAlt: number;
   };
 };
 
@@ -204,6 +206,7 @@ export default function CrawlPage() {
       | "hreflang_audit"
       | "security_audit"
       | "content_quality"
+      | "images"
       | "broken_links"
       | "redirect_chains",
     format: "csv" | "excel",
@@ -426,6 +429,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("images", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Images CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("broken_links", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -473,6 +484,8 @@ export default function CrawlPage() {
               <div>Content issues: {reportSummary.contentQualityIssues}</div>
               <div>Broken links w/source: {reportSummary.brokenLinksWithSources}</div>
               <div>Redirect chain issues: {reportSummary.redirectChainIssues}</div>
+              <div>Pages w/ missing img alt: {reportSummary.pagesWithMissingImageAlt}</div>
+              <div>Total images missing alt: {reportSummary.totalImagesMissingAlt}</div>
             </div>
           ) : null}
         </div>

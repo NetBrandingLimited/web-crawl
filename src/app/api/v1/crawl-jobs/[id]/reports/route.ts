@@ -14,6 +14,7 @@ function classifyIssues(row: {
   h1Count: number;
   canonicalUrl: string | null;
   fetchError: string | null;
+  imgMissingAltCount: number;
 }) {
   const issues: string[] = [];
   if (row.fetchError) issues.push("fetch_error");
@@ -26,6 +27,7 @@ function classifyIssues(row: {
   if (row.metaDesc && row.metaDesc.length > 160) issues.push("meta_description_too_long");
   if (row.h1Count === 0) issues.push("missing_h1");
   if (!row.canonicalUrl) issues.push("missing_canonical");
+  if (row.imgMissingAltCount > 0) issues.push("images_missing_alt");
   return issues;
 }
 
@@ -241,6 +243,8 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const redirectChainIssues = await prisma.urlFetch.count({
       where: { jobId, redirectHops: { gte: 2 } },
     });
+    const pagesWithMissingImageAlt = audits.filter((a) => a.imgMissingAltCount > 0).length;
+    const totalImagesMissingAlt = audits.reduce((s, a) => s + a.imgMissingAltCount, 0);
 
     return NextResponse.json({
       jobId,
@@ -266,6 +270,8 @@ export async function GET(req: Request, ctx: RouteCtx) {
         contentQualityIssues,
         brokenLinksWithSources,
         redirectChainIssues,
+        pagesWithMissingImageAlt,
+        totalImagesMissingAlt,
       },
     });
   }
@@ -288,6 +294,8 @@ export async function GET(req: Request, ctx: RouteCtx) {
       robots_meta: a.robotsMeta,
       hreflang_count: a.hreflangCount,
       links_out_count: a.linksOutCount,
+      img_count: a.imgCount,
+      img_missing_alt_count: a.imgMissingAltCount,
       word_count: a.wordCount,
       fetched_at: a.fetchedAt.toISOString(),
       fetch_error: a.fetchError,
@@ -795,6 +803,17 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = chainRows;
+  } else if (report === "images") {
+    rows = audits.map((a) => ({
+      url: a.url,
+      depth: a.depth,
+      http_status: a.httpStatus,
+      content_type: a.contentType,
+      img_count: a.imgCount,
+      img_missing_alt_count: a.imgMissingAltCount,
+      title: a.title,
+      issue: a.imgMissingAltCount > 0 ? "missing_alt_on_image" : null,
+    }));
   } else if (report === "hreflang_audit") {
     rows = audits.map((a) => ({
       url: a.url,
