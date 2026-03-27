@@ -119,6 +119,79 @@ type CrawlSummaryResponse = {
   };
 };
 
+type ExportReportKey =
+  | "issues"
+  | "pages"
+  | "duplicates"
+  | "redirects"
+  | "duplicate_titles"
+  | "duplicate_h1"
+  | "duplicate_meta_descriptions"
+  | "near_duplicates"
+  | "canonical_audit"
+  | "canonical_clusters"
+  | "canonical_loops"
+  | "canonical_orphans"
+  | "heading_audit"
+  | "site_structure"
+  | "url_issues"
+  | "parameter_variants"
+  | "indexability_audit"
+  | "directives_audit"
+  | "robots_blocked"
+  | "hreflang_audit"
+  | "security_audit"
+  | "caching"
+  | "encoding_audit"
+  | "security_headers"
+  | "content_quality"
+  | "performance"
+  | "link_breakdown"
+  | "pagination"
+  | "feeds_amp"
+  | "social_meta"
+  | "structured_data"
+  | "images"
+  | "broken_links"
+  | "redirect_chains";
+
+const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
+  { id: "issues", label: "Issues CSV" },
+  { id: "pages", label: "Pages CSV" },
+  { id: "duplicates", label: "Duplicates CSV" },
+  { id: "redirects", label: "Redirects CSV" },
+  { id: "duplicate_titles", label: "Duplicate Titles CSV" },
+  { id: "duplicate_h1", label: "Duplicate H1 CSV" },
+  { id: "duplicate_meta_descriptions", label: "Duplicate Meta CSV" },
+  { id: "near_duplicates", label: "Near Duplicates CSV" },
+  { id: "canonical_audit", label: "Canonical Audit CSV" },
+  { id: "canonical_clusters", label: "Canonical Clusters CSV" },
+  { id: "canonical_loops", label: "Canonical Loops CSV" },
+  { id: "canonical_orphans", label: "Canonical Orphans CSV" },
+  { id: "heading_audit", label: "H1/H2 Audit CSV" },
+  { id: "site_structure", label: "Site Structure CSV" },
+  { id: "url_issues", label: "URL Issues CSV" },
+  { id: "parameter_variants", label: "Parameter Variants CSV" },
+  { id: "indexability_audit", label: "Indexability Audit CSV" },
+  { id: "directives_audit", label: "Directives CSV" },
+  { id: "robots_blocked", label: "Robots blocked CSV" },
+  { id: "structured_data", label: "Structured Data CSV" },
+  { id: "hreflang_audit", label: "hreflang CSV" },
+  { id: "security_audit", label: "Security CSV" },
+  { id: "caching", label: "Caching CSV" },
+  { id: "encoding_audit", label: "Encoding CSV" },
+  { id: "security_headers", label: "Security headers CSV" },
+  { id: "content_quality", label: "Content Quality CSV" },
+  { id: "performance", label: "Performance CSV" },
+  { id: "link_breakdown", label: "Link breakdown CSV" },
+  { id: "pagination", label: "Pagination CSV" },
+  { id: "feeds_amp", label: "Feeds / AMP CSV" },
+  { id: "social_meta", label: "Social / OG CSV" },
+  { id: "images", label: "Images CSV" },
+  { id: "broken_links", label: "Broken Links CSV" },
+  { id: "redirect_chains", label: "Redirect Chains CSV" },
+];
+
 export default function CrawlPage() {
   const [domain, setDomain] = useState("example.com");
   const [jobId, setJobId] = useState<string | null>(null);
@@ -251,44 +324,7 @@ export default function CrawlPage() {
     a.remove();
   }
 
-  function exportReport(
-    report:
-      | "issues"
-      | "pages"
-      | "duplicates"
-      | "redirects"
-      | "duplicate_titles"
-      | "duplicate_h1"
-      | "duplicate_meta_descriptions"
-      | "near_duplicates"
-      | "canonical_audit"
-      | "canonical_clusters"
-      | "canonical_loops"
-      | "canonical_orphans"
-      | "heading_audit"
-      | "site_structure"
-      | "url_issues"
-      | "parameter_variants"
-      | "indexability_audit"
-      | "directives_audit"
-      | "robots_blocked"
-      | "hreflang_audit"
-      | "security_audit"
-      | "caching"
-      | "encoding_audit"
-      | "security_headers"
-      | "content_quality"
-      | "performance"
-      | "link_breakdown"
-      | "pagination"
-      | "feeds_amp"
-      | "social_meta"
-      | "structured_data"
-      | "images"
-      | "broken_links"
-      | "redirect_chains",
-    format: "csv" | "excel",
-  ) {
+  function exportReport(report: ExportReportKey, format: "csv" | "excel") {
     if (!jobId) return;
     const u = `/api/v1/crawl-jobs/${jobId}/reports?report=${report}&format=${format}`;
     triggerDownload(u);
@@ -384,279 +420,18 @@ export default function CrawlPage() {
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
             <div className="text-sm font-medium">Phase 1 Reports</div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("issues", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Issues CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("pages", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Pages CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("duplicates", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Duplicates CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("redirects", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Redirects CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("duplicate_titles", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Duplicate Titles CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("duplicate_h1", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Duplicate H1 CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("duplicate_meta_descriptions", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Duplicate Meta CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("near_duplicates", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Near Duplicates CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("canonical_audit", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Canonical Audit CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("canonical_clusters", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Canonical Clusters CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("canonical_loops", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Canonical Loops CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("canonical_orphans", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Canonical Orphans CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("heading_audit", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                H1/H2 Audit CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("site_structure", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Site Structure CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("url_issues", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                URL Issues CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("parameter_variants", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Parameter Variants CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("indexability_audit", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Indexability Audit CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("directives_audit", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Directives CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("robots_blocked", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Robots blocked CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("structured_data", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Structured Data CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("hreflang_audit", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                hreflang CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("security_audit", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Security CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("caching", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Caching CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("encoding_audit", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Encoding CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("security_headers", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Security headers CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("content_quality", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Content Quality CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("performance", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Performance CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("link_breakdown", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Link breakdown CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("pagination", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Pagination CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("feeds_amp", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Feeds / AMP CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("social_meta", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Social / OG CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("images", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Images CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("broken_links", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Broken Links CSV
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => exportReport("redirect_chains", "csv")}
-                disabled={!jobId}
-                type="button"
-              >
-                Redirect Chains CSV
-              </button>
+            <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+              {REPORT_BUTTONS.map((report) => (
+                <button
+                  key={report.id}
+                  className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => exportReport(report.id, "csv")}
+                  disabled={!jobId}
+                  type="button"
+                >
+                  {report.label}
+                </button>
+              ))}
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportSitemapXml()}
