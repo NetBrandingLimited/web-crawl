@@ -17,6 +17,7 @@ function classifyIssues(row: {
   imgMissingAltCount: number;
   robotsMeta: string | null;
   xRobotsTag: string | null;
+  responseTimeMs: number | null;
 }) {
   const issues: string[] = [];
   if (row.fetchError) {
@@ -34,6 +35,15 @@ function classifyIssues(row: {
   if (!row.canonicalUrl) issues.push("missing_canonical");
   if (row.imgMissingAltCount > 0) issues.push("images_missing_alt");
   if (hasRobotsNoindex(row.robotsMeta, row.xRobotsTag)) issues.push("noindex_directive");
+  if (
+    row.responseTimeMs != null &&
+    row.responseTimeMs >= 5000 &&
+    row.httpStatus != null &&
+    row.httpStatus >= 200 &&
+    row.httpStatus < 300
+  ) {
+    issues.push("slow_response");
+  }
   return issues;
 }
 
@@ -234,6 +244,20 @@ export async function GET(req: Request, ctx: RouteCtx) {
     }).length;
     const pagesWithJsonLd = audits.filter((a) => a.jsonLdCount > 0).length;
     const robotsTxtBlocked = audits.filter((a) => a.fetchError === "robots_disallowed").length;
+    const timings = audits
+      .map((a) => a.responseTimeMs)
+      .filter((ms): ms is number => ms != null && ms >= 0);
+    const avgResponseTimeMs =
+      timings.length > 0 ? Math.round(timings.reduce((s, n) => s + n, 0) / timings.length) : 0;
+    const slowResponsePages = audits.filter(
+      (a) =>
+        a.responseTimeMs != null &&
+        a.responseTimeMs >= 3000 &&
+        a.httpStatus != null &&
+        a.httpStatus >= 200 &&
+        a.httpStatus < 300,
+    ).length;
+    const pagesWithExternalLinks = audits.filter((a) => a.linksExternalCount > 0).length;
     const securityIssues = audits.filter((a) => {
       const issues: string[] = [];
       try {
@@ -305,6 +329,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         totalImagesMissingAlt,
         pagesWithJsonLd,
         robotsTxtBlocked,
+        avgResponseTimeMs,
+        slowResponsePages,
+        pagesWithExternalLinks,
       },
     });
   }
@@ -330,6 +357,8 @@ export async function GET(req: Request, ctx: RouteCtx) {
       json_ld_count: a.jsonLdCount,
       json_ld_types: a.jsonLdTypesSummary,
       links_out_count: a.linksOutCount,
+      links_external_count: a.linksExternalCount,
+      response_time_ms: a.responseTimeMs,
       img_count: a.imgCount,
       img_missing_alt_count: a.imgMissingAltCount,
       word_count: a.wordCount,
@@ -836,6 +865,17 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = chainRows;
+  } else if (report === "performance") {
+    rows = audits.map((a) => ({
+      url: a.url,
+      depth: a.depth,
+      http_status: a.httpStatus,
+      content_type: a.contentType,
+      response_time_ms: a.responseTimeMs,
+      links_out_count: a.linksOutCount,
+      links_external_count: a.linksExternalCount,
+      word_count: a.wordCount,
+    }));
   } else if (report === "robots_blocked") {
     rows = audits
       .filter((a) => a.fetchError === "robots_disallowed")

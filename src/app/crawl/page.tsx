@@ -67,6 +67,9 @@ type CrawlSummaryResponse = {
     totalImagesMissingAlt: number;
     pagesWithJsonLd: number;
     robotsTxtBlocked: number;
+    avgResponseTimeMs: number;
+    slowResponsePages: number;
+    pagesWithExternalLinks: number;
   };
 };
 
@@ -210,6 +213,7 @@ export default function CrawlPage() {
       | "hreflang_audit"
       | "security_audit"
       | "content_quality"
+      | "performance"
       | "structured_data"
       | "images"
       | "broken_links"
@@ -450,6 +454,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("performance", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Performance CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("images", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -509,6 +521,9 @@ export default function CrawlPage() {
               <div>Total images missing alt: {reportSummary.totalImagesMissingAlt}</div>
               <div>Pages with JSON-LD: {reportSummary.pagesWithJsonLd}</div>
               <div>Robots.txt blocked: {reportSummary.robotsTxtBlocked}</div>
+              <div>Avg response (ms): {reportSummary.avgResponseTimeMs}</div>
+              <div>Slow pages (≥3s): {reportSummary.slowResponsePages}</div>
+              <div>Pages w/ external links: {reportSummary.pagesWithExternalLinks}</div>
             </div>
           ) : null}
         </div>

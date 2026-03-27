@@ -86,11 +86,13 @@ model CrawlPageAudit {
   xRobotsTag    String?  @db.VarChar(512)
   hreflangCount Int      @default(0)
   linksOutCount Int      @default(0)
+  linksExternalCount Int @default(0)
   imgCount           Int @default(0)
   imgMissingAltCount Int @default(0)
   jsonLdCount        Int @default(0)
   jsonLdTypesSummary String?  @db.VarChar(1024)
   wordCount     Int      @default(0)
+  responseTimeMs Int?
   contentHash   String?  @db.Char(40)
   fetchedAt     DateTime @default(now())
   fetchError    String?  @db.VarChar(512)

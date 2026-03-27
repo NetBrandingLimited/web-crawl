@@ -308,6 +308,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         item.job.followRedirects ? 10 : 0,
         FETCH_TIMEOUT_MS,
       );
+      const responseTimeMs = Math.min(2_147_483_647, Date.now() - fetchStartedAt.getTime());
 
       const finalUrl = result.finalUrl;
       const status = result.status;
@@ -387,6 +388,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             depth: item.depth,
             httpStatus: status,
             contentType,
+            responseTimeMs,
           },
           update: {
             url: finalNormalized,
@@ -394,6 +396,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             httpStatus: status,
             contentType,
             fetchError: null,
+            responseTimeMs,
             fetchedAt: new Date(),
           },
         }),
@@ -461,6 +464,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const h2Count = $("h2").length;
         const hreflangCount = $("link[rel='alternate'][hreflang]").length;
         const linksOutCount = $("a[href]").length;
+        const seedHost = new URL(item.job.seedUrl).hostname.toLowerCase();
+        let linksExternalCount = 0;
+        $("a[href]").each((_, el) => {
+          try {
+            const href = $(el).attr("href");
+            if (href == null || href === "") return;
+            const abs = new URL(href, item.url);
+            if (abs.protocol !== "http:" && abs.protocol !== "https:") return;
+            if (abs.hostname.toLowerCase() !== seedHost) linksExternalCount += 1;
+          } catch {
+            /* ignore malformed href */
+          }
+        });
         const imgCount = $("img").length;
         let imgMissingAltCount = 0;
         $("img").each((_, el) => {
@@ -503,6 +519,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               xRobotsTag,
               hreflangCount,
               linksOutCount,
+              linksExternalCount,
               imgCount,
               imgMissingAltCount,
               jsonLdCount,
@@ -521,6 +538,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               xRobotsTag,
               jsonLdCount: 0,
               jsonLdTypesSummary: null,
+              linksExternalCount: 0,
               fetchedAt: new Date(),
             },
           }),
