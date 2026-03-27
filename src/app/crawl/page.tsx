@@ -241,6 +241,16 @@ export default function CrawlPage() {
     setUrls(json.items);
   }
 
+  function triggerDownload(url: string) {
+    // More reliable than window.open for attachment responses; avoids popup blocking.
+    const a = document.createElement("a");
+    a.href = url;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   function exportReport(
     report:
       | "issues"
@@ -281,13 +291,13 @@ export default function CrawlPage() {
   ) {
     if (!jobId) return;
     const u = `/api/v1/crawl-jobs/${jobId}/reports?report=${report}&format=${format}`;
-    window.open(u, "_blank", "noopener,noreferrer");
+    triggerDownload(u);
   }
 
   function exportSitemapXml() {
     if (!jobId) return;
     const u = `/api/v1/crawl-jobs/${jobId}/sitemap`;
-    window.open(u, "_blank", "noopener,noreferrer");
+    triggerDownload(u);
   }
 
   return (
