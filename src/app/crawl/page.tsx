@@ -94,6 +94,9 @@ type CrawlSummaryResponse = {
     canonicalCrossDomain: number;
     canonicalProtocolMismatch: number;
     canonicalWithFragment: number;
+    canonicalizedToOther: number;
+    canonicalClusterCount: number;
+    canonicalClusteredPages: number;
     pagesWithAmphtml: number;
     pagesWithRssFeed: number;
     pagesWithAtomFeed: number;
@@ -238,6 +241,7 @@ export default function CrawlPage() {
       | "duplicate_meta_descriptions"
       | "near_duplicates"
       | "canonical_audit"
+      | "canonical_clusters"
       | "heading_audit"
       | "site_structure"
       | "url_issues"
@@ -427,6 +431,14 @@ export default function CrawlPage() {
                 type="button"
               >
                 Canonical Audit CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("canonical_clusters", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Canonical Clusters CSV
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
@@ -652,6 +664,9 @@ export default function CrawlPage() {
               <div>Canonical cross-domain: {reportSummary.canonicalCrossDomain}</div>
               <div>Canonical protocol mismatch: {reportSummary.canonicalProtocolMismatch}</div>
               <div>Canonical with fragment: {reportSummary.canonicalWithFragment}</div>
+              <div>Canonicalized to other: {reportSummary.canonicalizedToOther}</div>
+              <div>Canonical clusters: {reportSummary.canonicalClusterCount}</div>
+              <div>Pages in canonical clusters: {reportSummary.canonicalClusteredPages}</div>
               <div>Pages with amphtml: {reportSummary.pagesWithAmphtml}</div>
               <div>Pages with RSS feed: {reportSummary.pagesWithRssFeed}</div>
               <div>Pages with Atom feed: {reportSummary.pagesWithAtomFeed}</div>

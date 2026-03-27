@@ -291,6 +291,8 @@ export async function GET(req: Request, ctx: RouteCtx) {
     let canonicalCrossDomain = 0;
     let canonicalProtocolMismatch = 0;
     let canonicalWithFragment = 0;
+    let canonicalizedToOther = 0;
+    const canonicalTargets = new Map<string, { target: string; pages: typeof audits }>();
     for (const a of audits) {
       if (!a.canonicalUrl) {
         canonicalIssues += 1;
@@ -302,11 +304,24 @@ export async function GET(req: Request, ctx: RouteCtx) {
         const isSelf =
           normalizeUrlForCanonicalCompare(page) === normalizeUrlForCanonicalCompare(canonical);
         if (!isSelf) canonicalIssues += 1;
+        if (!isSelf) canonicalizedToOther += 1;
         if (page.host !== canonical.host) canonicalCrossDomain += 1;
         if (page.protocol !== canonical.protocol) canonicalProtocolMismatch += 1;
         if (canonical.hash) canonicalWithFragment += 1;
+        const key = normalizeUrlForCanonicalCompare(canonical);
+        const hit = canonicalTargets.get(key) ?? { target: canonical.toString(), pages: [] };
+        hit.pages.push(a);
+        canonicalTargets.set(key, hit);
       } catch {
         canonicalIssues += 1;
+      }
+    }
+    let canonicalClusterCount = 0;
+    let canonicalClusteredPages = 0;
+    for (const v of canonicalTargets.values()) {
+      if (v.pages.length >= 2) {
+        canonicalClusterCount += 1;
+        canonicalClusteredPages += v.pages.length;
       }
     }
     const headingIssues = audits.filter(
@@ -466,6 +481,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         canonicalCrossDomain,
         canonicalProtocolMismatch,
         canonicalWithFragment,
+        canonicalizedToOther,
+        canonicalClusterCount,
+        canonicalClusteredPages,
         pagesWithRelNext,
         pagesWithRelPrev,
         pagesWithAmphtml,
@@ -822,6 +840,35 @@ export async function GET(req: Request, ctx: RouteCtx) {
         issue,
       };
     });
+  } else if (report === "canonical_clusters") {
+    const byCanonical = new Map<string, { target: string; pages: typeof audits }>();
+    for (const a of audits) {
+      if (!a.canonicalUrl) continue;
+      try {
+        const canonical = new URL(a.canonicalUrl, a.url);
+        const key = normalizeUrlForCanonicalCompare(canonical);
+        const hit = byCanonical.get(key) ?? { target: canonical.toString(), pages: [] };
+        hit.pages.push(a);
+        byCanonical.set(key, hit);
+      } catch {
+        /* skip invalid canonical values */
+      }
+    }
+    for (const [key, group] of byCanonical) {
+      if (group.pages.length < 2) continue;
+      for (const row of group.pages) {
+        rows.push({
+          canonical_target_key: key,
+          canonical_target_url: group.target,
+          cluster_size: group.pages.length,
+          url: row.url,
+          depth: row.depth,
+          http_status: row.httpStatus,
+          canonical_raw: row.canonicalUrl,
+          title: row.title,
+        });
+      }
+    }
   } else if (report === "heading_audit") {
     rows = audits.map((a) => {
       const issues: string[] = [];
