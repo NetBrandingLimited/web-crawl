@@ -293,6 +293,7 @@ export default function CrawlPage() {
   async function refresh(id?: string) {
     const effectiveId = id ?? jobId;
     if (!effectiveId) return;
+    setError(null);
     const res = await fetch(`/api/v1/crawl-jobs/${effectiveId}`, { cache: "no-store" });
     if (!res.ok) return;
     setStatus((await res.json()) as CrawlJobStatusResponse);
@@ -303,6 +304,7 @@ export default function CrawlPage() {
       const summaryJson = (await summaryRes.json()) as CrawlSummaryResponse;
       setReportSummary(summaryJson.totals);
     }
+    await loadUrls(effectiveId);
   }
 
   async function loadUrls(id?: string) {
@@ -326,7 +328,8 @@ export default function CrawlPage() {
 
   function exportReport(report: ExportReportKey, format: "csv" | "excel") {
     if (!jobId) return;
-    if (!reportSummary || reportSummary.urls === 0) {
+    const fetched = status?.stats.fetched ?? 0;
+    if (fetched === 0) {
       setError("No audit data yet for this job. Run worker or start a new crawl, then refresh.");
       return;
     }
@@ -336,7 +339,8 @@ export default function CrawlPage() {
 
   function exportSitemapXml() {
     if (!jobId) return;
-    if (!reportSummary || reportSummary.urls === 0) {
+    const fetched = status?.stats.fetched ?? 0;
+    if (fetched === 0) {
       setError("No audit data yet for this job. Run worker or start a new crawl, then refresh.");
       return;
     }

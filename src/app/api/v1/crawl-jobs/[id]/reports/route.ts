@@ -728,7 +728,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
     return NextResponse.json({
       jobId,
       totals: {
-        urls: audits.length,
+        urls: Math.max(audits.length, queueRows.length),
         broken,
         redirects,
         missingTitles,
