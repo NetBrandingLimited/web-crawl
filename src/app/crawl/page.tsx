@@ -144,6 +144,7 @@ type ExportReportKey =
   | "top_inlinked_pages"
   | "click_depth_distribution"
   | "crawl_pathing"
+  | "top_directories"
   | "url_issues"
   | "parameter_variants"
   | "indexability_audit"
@@ -184,6 +185,7 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "top_inlinked_pages", label: "Top Inlinked Pages CSV" },
   { id: "click_depth_distribution", label: "Click Depth Distribution CSV" },
   { id: "crawl_pathing", label: "Crawl Pathing CSV" },
+  { id: "top_directories", label: "Top Directories CSV" },
   { id: "url_issues", label: "URL Issues CSV" },
   { id: "parameter_variants", label: "Parameter Variants CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },

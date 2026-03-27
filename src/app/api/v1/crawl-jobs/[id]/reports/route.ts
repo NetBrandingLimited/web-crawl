@@ -1666,6 +1666,57 @@ export async function GET(req: Request, ctx: RouteCtx) {
           edge_type: "internal_link_discovery",
         };
       });
+  } else if (report === "top_directories") {
+    fallbackHeaders = [
+      "directory_path",
+      "url_count",
+      "avg_depth",
+      "min_depth",
+      "max_depth",
+      "sample_urls",
+    ];
+    const groups = new Map<
+      string,
+      { count: number; depthSum: number; minDepth: number; maxDepth: number; samples: string[] }
+    >();
+    for (const q of queueRows) {
+      let key = "/";
+      try {
+        const u = new URL(q.url);
+        const segs = u.pathname.split("/").filter(Boolean);
+        key = segs.length === 0 ? "/" : `/${segs[0]}/`;
+      } catch {
+        key = "/";
+      }
+      const hit = groups.get(key) ?? {
+        count: 0,
+        depthSum: 0,
+        minDepth: Number.POSITIVE_INFINITY,
+        maxDepth: Number.NEGATIVE_INFINITY,
+        samples: [],
+      };
+      hit.count += 1;
+      hit.depthSum += q.depth;
+      hit.minDepth = Math.min(hit.minDepth, q.depth);
+      hit.maxDepth = Math.max(hit.maxDepth, q.depth);
+      if (hit.samples.length < 5) hit.samples.push(q.url);
+      groups.set(key, hit);
+    }
+    rows = [...groups.entries()]
+      .map(([directoryPath, g]) => ({
+        directory_path: directoryPath,
+        url_count: g.count,
+        avg_depth: Math.round((g.depthSum / Math.max(1, g.count)) * 100) / 100,
+        min_depth: Number.isFinite(g.minDepth) ? g.minDepth : null,
+        max_depth: Number.isFinite(g.maxDepth) ? g.maxDepth : null,
+        sample_urls: g.samples.join("|"),
+      }))
+      .sort((a, b) => {
+        if ((b.url_count as number) !== (a.url_count as number)) {
+          return (b.url_count as number) - (a.url_count as number);
+        }
+        return String(a.directory_path).localeCompare(String(b.directory_path));
+      });
   } else if (report === "url_issues") {
     rows = queueRows.map((q) => {
       const issues: string[] = [];
