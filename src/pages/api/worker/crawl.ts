@@ -63,6 +63,34 @@ function cleanText(v: string | undefined | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+/** Normalize HTTP header (e.g. X-Robots-Tag) for storage; cap length for VARCHAR. */
+function cleanHeaderValue(v: string | null, maxLen: number): string | null {
+  const t = cleanText(v);
+  if (!t) return null;
+  return t.length > maxLen ? t.slice(0, maxLen) : t;
+}
+
+function collectJsonLdTypes(node: unknown, types: Set<string>): void {
+  if (node == null) return;
+  if (Array.isArray(node)) {
+    for (const x of node) collectJsonLdTypes(x, types);
+    return;
+  }
+  if (typeof node !== "object") return;
+  const o = node as Record<string, unknown>;
+  const t = o["@type"];
+  if (typeof t === "string") types.add(t);
+  else if (Array.isArray(t)) {
+    for (const x of t) {
+      if (typeof x === "string") types.add(x);
+    }
+  }
+  for (const key of Object.keys(o)) {
+    if (key === "@context") continue;
+    collectJsonLdTypes(o[key], types);
+  }
+}
+
 type RedirectHop = { url: string; status: number };
 
 async function fetchWithRedirects(
@@ -197,6 +225,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const finalUrl = result.finalUrl;
       const status = result.status;
       const contentType = result.headers.get("content-type") ?? "";
+      const xRobotsTag = cleanHeaderValue(result.headers.get("x-robots-tag"), 512);
       const contentLengthHeader = result.headers.get("content-length");
       const contentLength = contentLengthHeader
         ? BigInt(contentLengthHeader)
@@ -354,6 +383,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const wordCount = bodyText.length === 0 ? 0 : bodyText.split(" ").length;
         const contentHash = bodyText.length > 0 ? sha1Hex(bodyText.toLowerCase()) : null;
 
+        let jsonLdCount = 0;
+        const jsonLdTypes = new Set<string>();
+        $('script[type="application/ld+json"]').each((_, el) => {
+          const raw = $(el).html()?.trim() ?? "";
+          if (!raw) return;
+          jsonLdCount += 1;
+          try {
+            collectJsonLdTypes(JSON.parse(raw), jsonLdTypes);
+          } catch {
+            /* invalid JSON-LD */
+          }
+        });
+        const jsonLdTypesSorted = [...jsonLdTypes].sort();
+        const jsonLdTypesSummary =
+          jsonLdTypesSorted.length === 0
+            ? null
+            : jsonLdTypesSorted.slice(0, 40).join("|").slice(0, 1024);
+
         await safeAuditWrite(() =>
           prisma.crawlPageAudit.update({
             where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
@@ -366,12 +413,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               h2Count,
               canonicalUrl,
               robotsMeta,
+              xRobotsTag,
               hreflangCount,
               linksOutCount,
               imgCount,
               imgMissingAltCount,
+              jsonLdCount,
+              jsonLdTypesSummary,
               wordCount,
               contentHash,
+              fetchedAt: new Date(),
+            },
+          }),
+        );
+      } else {
+        await safeAuditWrite(() =>
+          prisma.crawlPageAudit.update({
+            where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
+            data: {
+              xRobotsTag,
+              jsonLdCount: 0,
+              jsonLdTypesSummary: null,
               fetchedAt: new Date(),
             },
           }),

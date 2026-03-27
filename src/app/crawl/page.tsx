@@ -65,6 +65,7 @@ type CrawlSummaryResponse = {
     redirectChainIssues: number;
     pagesWithMissingImageAlt: number;
     totalImagesMissingAlt: number;
+    pagesWithJsonLd: number;
   };
 };
 
@@ -206,6 +207,7 @@ export default function CrawlPage() {
       | "hreflang_audit"
       | "security_audit"
       | "content_quality"
+      | "structured_data"
       | "images"
       | "broken_links"
       | "redirect_chains",
@@ -405,6 +407,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("structured_data", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Structured Data CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("hreflang_audit", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -486,6 +496,7 @@ export default function CrawlPage() {
               <div>Redirect chain issues: {reportSummary.redirectChainIssues}</div>
               <div>Pages w/ missing img alt: {reportSummary.pagesWithMissingImageAlt}</div>
               <div>Total images missing alt: {reportSummary.totalImagesMissingAlt}</div>
+              <div>Pages with JSON-LD: {reportSummary.pagesWithJsonLd}</div>
             </div>
           ) : null}
         </div>

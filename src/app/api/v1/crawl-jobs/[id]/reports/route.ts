@@ -15,6 +15,8 @@ function classifyIssues(row: {
   canonicalUrl: string | null;
   fetchError: string | null;
   imgMissingAltCount: number;
+  robotsMeta: string | null;
+  xRobotsTag: string | null;
 }) {
   const issues: string[] = [];
   if (row.fetchError) issues.push("fetch_error");
@@ -28,6 +30,7 @@ function classifyIssues(row: {
   if (row.h1Count === 0) issues.push("missing_h1");
   if (!row.canonicalUrl) issues.push("missing_canonical");
   if (row.imgMissingAltCount > 0) issues.push("images_missing_alt");
+  if (hasRobotsNoindex(row.robotsMeta, row.xRobotsTag)) issues.push("noindex_directive");
   return issues;
 }
 
@@ -66,6 +69,31 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>) {
   for (const v of a) if (b.has(v)) inter++;
   const union = a.size + b.size - inter;
   return union === 0 ? 0 : inter / union;
+}
+
+function robotsDirectivesLower(meta: string | null, xRobots: string | null): string {
+  return `${meta ?? ""} ${xRobots ?? ""}`.toLowerCase();
+}
+
+function hasRobotsNoindex(meta: string | null, xRobots: string | null): boolean {
+  const c = robotsDirectivesLower(meta, xRobots);
+  return c.includes("noindex") || c.includes("none");
+}
+
+function hasRestrictiveRobotsDirectives(meta: string | null, xRobots: string | null): boolean {
+  const c = robotsDirectivesLower(meta, xRobots);
+  return c.includes("noindex") || c.includes("nofollow") || c.includes("none");
+}
+
+function robotsDirectiveTokens(meta: string | null, xRobots: string | null): string[] {
+  const combined = [meta, xRobots].filter((s) => s && String(s).trim()).join(",");
+  return !combined
+    ? []
+    : combined
+        .toLowerCase()
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
 }
 
 export async function GET(req: Request, ctx: RouteCtx) {
@@ -192,17 +220,16 @@ export async function GET(req: Request, ctx: RouteCtx) {
         return true;
       }
     }).length;
-    const directivesIssues = audits.filter((a) => {
-      const robots = (a.robotsMeta ?? "").toLowerCase();
-      return robots.includes("noindex") || robots.includes("nofollow") || robots.includes("none");
-    }).length;
+    const directivesIssues = audits.filter((a) =>
+      hasRestrictiveRobotsDirectives(a.robotsMeta, a.xRobotsTag),
+    ).length;
     const hreflangIssues = audits.filter((a) => a.hreflangCount === 0).length;
     const indexableUrls = audits.filter((a) => {
-      const robots = (a.robotsMeta ?? "").toLowerCase();
-      const hasNoindex = robots.includes("noindex") || robots.includes("none");
+      const hasNoindex = hasRobotsNoindex(a.robotsMeta, a.xRobotsTag);
       const okStatus = a.httpStatus == null || (a.httpStatus >= 200 && a.httpStatus < 300);
       return okStatus && !hasNoindex;
     }).length;
+    const pagesWithJsonLd = audits.filter((a) => a.jsonLdCount > 0).length;
     const securityIssues = audits.filter((a) => {
       const issues: string[] = [];
       try {
@@ -272,6 +299,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         redirectChainIssues,
         pagesWithMissingImageAlt,
         totalImagesMissingAlt,
+        pagesWithJsonLd,
       },
     });
   }
@@ -292,7 +320,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
       h2_count: a.h2Count,
       canonical_url: a.canonicalUrl,
       robots_meta: a.robotsMeta,
+      x_robots_tag: a.xRobotsTag,
       hreflang_count: a.hreflangCount,
+      json_ld_count: a.jsonLdCount,
+      json_ld_types: a.jsonLdTypesSummary,
       links_out_count: a.linksOutCount,
       img_count: a.imgCount,
       img_missing_alt_count: a.imgMissingAltCount,
@@ -639,19 +670,16 @@ export async function GET(req: Request, ctx: RouteCtx) {
     });
   } else if (report === "directives_audit") {
     rows = audits.map((a) => {
-      const robotsRaw = a.robotsMeta ?? "";
-      const robots = robotsRaw.toLowerCase();
-      const directives = robots
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
-      const hasNoindex = directives.includes("noindex") || directives.includes("none");
-      const hasNofollow = directives.includes("nofollow") || directives.includes("none");
+      const directives = robotsDirectiveTokens(a.robotsMeta, a.xRobotsTag);
+      const hasNoindex = hasRobotsNoindex(a.robotsMeta, a.xRobotsTag);
+      const directivesLower = robotsDirectivesLower(a.robotsMeta, a.xRobotsTag);
+      const hasNofollow = directivesLower.includes("nofollow") || directivesLower.includes("none");
       return {
         url: a.url,
         depth: a.depth,
         http_status: a.httpStatus,
-        robots_meta: robotsRaw || null,
+        robots_meta: a.robotsMeta || null,
+        x_robots_tag: a.xRobotsTag || null,
         directives: directives.join("|"),
         has_noindex: hasNoindex,
         has_nofollow: hasNofollow,
@@ -803,6 +831,18 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = chainRows;
+  } else if (report === "structured_data") {
+    rows = audits.map((a) => ({
+      url: a.url,
+      depth: a.depth,
+      http_status: a.httpStatus,
+      content_type: a.contentType,
+      json_ld_block_count: a.jsonLdCount,
+      json_ld_types: a.jsonLdTypesSummary,
+      robots_meta: a.robotsMeta,
+      x_robots_tag: a.xRobotsTag,
+      has_noindex: hasRobotsNoindex(a.robotsMeta, a.xRobotsTag),
+    }));
   } else if (report === "images") {
     rows = audits.map((a) => ({
       url: a.url,

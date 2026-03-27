@@ -22,14 +22,15 @@ export async function GET(_req: Request, ctx: RouteCtx) {
       depth: true,
       httpStatus: true,
       robotsMeta: true,
+      xRobotsTag: true,
       fetchedAt: true,
     },
     orderBy: [{ depth: "asc" }, { url: "asc" }],
   });
 
   const urls = rows.filter((r) => {
-    const robots = (r.robotsMeta ?? "").toLowerCase();
-    const hasNoindex = robots.includes("noindex") || robots.includes("none");
+    const combined = `${r.robotsMeta ?? ""} ${r.xRobotsTag ?? ""}`.toLowerCase();
+    const hasNoindex = combined.includes("noindex") || combined.includes("none");
     const okStatus = r.httpStatus == null || (r.httpStatus >= 200 && r.httpStatus < 300);
     return okStatus && !hasNoindex;
   });
