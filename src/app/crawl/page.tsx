@@ -179,7 +179,8 @@ type ExportReportKey =
   | "structured_data"
   | "images"
   | "broken_links"
-  | "redirect_chains";
+  | "redirect_chains"
+  | "redirect_canonical_mismatch";
 
 const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "issues", label: "Issues CSV" },
@@ -225,6 +226,7 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "images", label: "Images CSV" },
   { id: "broken_links", label: "Broken Links CSV" },
   { id: "redirect_chains", label: "Redirect Chains CSV" },
+  { id: "redirect_canonical_mismatch", label: "Redirect vs Canonical CSV" },
 ];
 
 export default function CrawlPage() {

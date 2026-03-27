@@ -2185,6 +2185,100 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = chainRows;
+  } else if (report === "redirect_canonical_mismatch") {
+    fallbackHeaders = [
+      "requested_url",
+      "final_url",
+      "final_http_status",
+      "canonical_raw",
+      "canonical_resolved",
+      "canonical_target_http_status",
+      "mismatch_type",
+    ];
+    const fetches = await prisma.urlFetch.findMany({
+      where: { jobId, redirectHops: { gte: 1 } },
+      select: {
+        id: true,
+        requestedUrl: true,
+        httpStatus: true,
+      },
+      orderBy: { requestedAt: "asc" },
+    });
+    const fetchIds = fetches.map((f) => f.id);
+    const redirects = fetchIds.length
+      ? await prisma.redirect.findMany({
+          where: { fetchId: { in: fetchIds } },
+          orderBy: [{ fetchId: "asc" }, { hopOrder: "asc" }],
+          select: { fetchId: true, hopOrder: true, toUrl: true },
+        })
+      : [];
+    const lastToByFetch = new Map<string, string>();
+    for (const r of redirects) {
+      lastToByFetch.set(r.fetchId, r.toUrl);
+    }
+    const auditByNormalizedUrl = new Map<string, (typeof audits)[number]>();
+    for (const a of audits) {
+      try {
+        auditByNormalizedUrl.set(normalizeUrlForCanonicalCompare(new URL(a.url)), a);
+      } catch {
+        /* ignore */
+      }
+    }
+    rows = [];
+    for (const f of fetches) {
+      const finalUrl = lastToByFetch.get(f.id) ?? null;
+      if (!finalUrl) continue;
+      let finalAudit: (typeof audits)[number] | null = null;
+      try {
+        finalAudit = auditByNormalizedUrl.get(normalizeUrlForCanonicalCompare(new URL(finalUrl))) ?? null;
+      } catch {
+        finalAudit = null;
+      }
+      if (!finalAudit?.canonicalUrl) continue;
+      let canonicalResolved: string | null = null;
+      try {
+        canonicalResolved = new URL(finalAudit.canonicalUrl, finalAudit.url).toString();
+      } catch {
+        canonicalResolved = null;
+      }
+      if (!canonicalResolved) {
+        rows.push({
+          requested_url: f.requestedUrl,
+          final_url: finalUrl,
+          final_http_status: f.httpStatus,
+          canonical_raw: finalAudit.canonicalUrl,
+          canonical_resolved: null,
+          canonical_target_http_status: null,
+          mismatch_type: "canonical_invalid_url",
+        });
+        continue;
+      }
+      let mismatchType: string | null = null;
+      try {
+        const finalKey = normalizeUrlForCanonicalCompare(new URL(finalUrl));
+        const canonKey = normalizeUrlForCanonicalCompare(new URL(canonicalResolved));
+        if (finalKey !== canonKey) mismatchType = "final_url_differs_from_canonical";
+      } catch {
+        mismatchType = "normalize_error";
+      }
+      if (!mismatchType) continue;
+      const canonTarget = (() => {
+        try {
+          return auditByNormalizedUrl.get(normalizeUrlForCanonicalCompare(new URL(canonicalResolved))) ?? null;
+        } catch {
+          return null;
+        }
+      })();
+      rows.push({
+        requested_url: f.requestedUrl,
+        final_url: finalUrl,
+        final_http_status: f.httpStatus,
+        canonical_raw: finalAudit.canonicalUrl,
+        canonical_resolved: canonicalResolved,
+        canonical_target_http_status: canonTarget?.httpStatus ?? null,
+        mismatch_type: mismatchType,
+      });
+    }
   } else if (report === "caching") {
     rows = audits.map((a) => ({
       url: a.url,
