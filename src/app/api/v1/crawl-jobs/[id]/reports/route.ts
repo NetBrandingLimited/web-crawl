@@ -1385,53 +1385,50 @@ export async function GET(req: Request, ctx: RouteCtx) {
         /* ignore invalid urls */
       }
     }
-    rows = audits
-      .flatMap((a) => {
-        if (!a.canonicalUrl) return [];
-        try {
-          const canonical = new URL(a.canonicalUrl, a.url);
-          const canonicalResolved = canonical.toString();
-          const canonicalKey = normalizeUrlForCanonicalCompare(canonical);
-          const target = byNormalizedPageUrl.get(canonicalKey) ?? null;
-          const targetStatus = target?.httpStatus ?? null;
-          let conflictType: string | null = null;
-          if (!target) {
-            conflictType = "canonical_target_not_in_crawl";
-          } else if (targetStatus == null) {
-            conflictType = "canonical_target_status_unknown";
-          } else if (targetStatus >= 300 && targetStatus < 400) {
-            conflictType = "canonical_target_redirects";
-          } else if (targetStatus >= 400) {
-            conflictType = "canonical_target_non_2xx";
-          }
-          if (!conflictType) return [];
-          return [
-            {
-              source_url: a.url,
-              source_depth: a.depth,
-              source_http_status: a.httpStatus,
-              canonical_raw: a.canonicalUrl,
-              canonical_resolved: canonicalResolved,
-              canonical_target_http_status: targetStatus,
-              canonical_target_seen_in_crawl: !!target,
-              conflict_type: conflictType,
-            },
-          ];
-        } catch {
-          return [
-            {
-              source_url: a.url,
-              source_depth: a.depth,
-              source_http_status: a.httpStatus,
-              canonical_raw: a.canonicalUrl,
-              canonical_resolved: null,
-              canonical_target_http_status: null,
-              canonical_target_seen_in_crawl: false,
-              conflict_type: "canonical_invalid_url",
-            },
-          ];
+    const conflictRows: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!a.canonicalUrl) continue;
+      try {
+        const canonical = new URL(a.canonicalUrl, a.url);
+        const canonicalResolved = canonical.toString();
+        const canonicalKey = normalizeUrlForCanonicalCompare(canonical);
+        const target = byNormalizedPageUrl.get(canonicalKey) ?? null;
+        const targetStatus = target?.httpStatus ?? null;
+        let conflictType: string | null = null;
+        if (!target) {
+          conflictType = "canonical_target_not_in_crawl";
+        } else if (targetStatus == null) {
+          conflictType = "canonical_target_status_unknown";
+        } else if (targetStatus >= 300 && targetStatus < 400) {
+          conflictType = "canonical_target_redirects";
+        } else if (targetStatus >= 400) {
+          conflictType = "canonical_target_non_2xx";
         }
-      });
+        if (!conflictType) continue;
+        conflictRows.push({
+          source_url: a.url,
+          source_depth: a.depth,
+          source_http_status: a.httpStatus,
+          canonical_raw: a.canonicalUrl,
+          canonical_resolved: canonicalResolved,
+          canonical_target_http_status: targetStatus,
+          canonical_target_seen_in_crawl: !!target,
+          conflict_type: conflictType,
+        });
+      } catch {
+        conflictRows.push({
+          source_url: a.url,
+          source_depth: a.depth,
+          source_http_status: a.httpStatus,
+          canonical_raw: a.canonicalUrl,
+          canonical_resolved: null,
+          canonical_target_http_status: null,
+          canonical_target_seen_in_crawl: false,
+          conflict_type: "canonical_invalid_url",
+        });
+      }
+    }
+    rows = conflictRows;
   } else if (report === "canonical_clusters") {
     fallbackHeaders = [
       "canonical_target_key",
