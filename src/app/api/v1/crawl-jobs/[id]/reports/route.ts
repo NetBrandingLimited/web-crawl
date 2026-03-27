@@ -238,6 +238,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const brokenLinksWithSources = audits.filter(
       (a) => (a.httpStatus ?? 0) >= 400 && queueRows.some((q) => q.urlHash === a.urlHash && !!q.discoveredFromUrlHash),
     ).length;
+    const redirectChainIssues = await prisma.urlFetch.count({
+      where: { jobId, redirectHops: { gte: 2 } },
+    });
 
     return NextResponse.json({
       jobId,
@@ -262,6 +265,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         securityIssues,
         contentQualityIssues,
         brokenLinksWithSources,
+        redirectChainIssues,
       },
     });
   }
@@ -727,6 +731,70 @@ export async function GET(req: Request, ctx: RouteCtx) {
           fetch_error: a.fetchError,
         };
       });
+  } else if (report === "redirect_chains") {
+    const fetches = await prisma.urlFetch.findMany({
+      where: { jobId, redirectHops: { gte: 1 } },
+      select: {
+        id: true,
+        requestedUrl: true,
+        httpStatus: true,
+        redirectHops: true,
+        finishedAt: true,
+      },
+      orderBy: { requestedAt: "asc" },
+    });
+    const fetchIds = fetches.map((f) => f.id);
+    const redirects = fetchIds.length
+      ? await prisma.redirect.findMany({
+          where: { fetchId: { in: fetchIds } },
+          orderBy: [{ fetchId: "asc" }, { hopOrder: "asc" }],
+          select: {
+            fetchId: true,
+            hopOrder: true,
+            fromUrl: true,
+            toUrl: true,
+            statusCode: true,
+          },
+        })
+      : [];
+    const redirectsByFetch = new Map<string, typeof redirects>();
+    for (const r of redirects) {
+      const arr = redirectsByFetch.get(r.fetchId) ?? [];
+      arr.push(r);
+      redirectsByFetch.set(r.fetchId, arr);
+    }
+    const chainRows: Array<Record<string, unknown>> = [];
+    for (const f of fetches) {
+      const hops = redirectsByFetch.get(f.id) ?? [];
+      if (hops.length === 0) {
+        chainRows.push({
+          requested_url: f.requestedUrl,
+          final_http_status: f.httpStatus,
+          redirect_hops: f.redirectHops ?? 0,
+          chain_type: (f.redirectHops ?? 0) >= 2 ? "multi_hop" : "single_hop",
+          hop_order: null,
+          from_url: null,
+          to_url: null,
+          hop_status_code: null,
+          fetched_at: f.finishedAt?.toISOString() ?? null,
+        });
+        continue;
+      }
+      for (const h of hops) {
+        chainRows.push({
+          requested_url: f.requestedUrl,
+          final_http_status: f.httpStatus,
+          redirect_hops: f.redirectHops ?? 0,
+          chain_type: (f.redirectHops ?? 0) >= 2 ? "multi_hop" : "single_hop",
+          hop_order: h.hopOrder,
+          from_url: h.fromUrl,
+          to_url: h.toUrl,
+          hop_status_code: h.statusCode,
+          fetched_at: f.finishedAt?.toISOString() ?? null,
+        });
+      }
+    }
+    rows = chainRows;
   } else if (report === "hreflang_audit") {
     rows = audits.map((a) => ({
       url: a.url,
