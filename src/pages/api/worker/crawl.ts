@@ -220,18 +220,20 @@ async function fetchWithRedirects(
 }
 
 function isMissingAuditTableError(err: unknown): boolean {
-  const msg = String(err);
-  // If Phase 1 audit storage isn't ready (migration not applied yet, schema mismatch, etc),
-  // we don't want the whole crawl worker to fail.
-  return (
-    msg.includes("CrawlPageAudit") &&
-    (msg.includes("does not exist") ||
-      msg.includes("relation") ||
-      msg.includes("table") ||
-      msg.includes("column") ||
-      msg.includes("unknown column") ||
-      msg.includes("UndefinedColumn"))
-  );
+  const msg = String(err).toLowerCase();
+  // Schema drift guard: if audit table/columns are not present yet, we degrade gracefully
+  // instead of failing the whole worker run.
+  const hasMissingColumnSignal =
+    msg.includes("p2022") ||
+    msg.includes("undefinedcolumn") ||
+    msg.includes("unknown column") ||
+    (msg.includes("column") && msg.includes("does not exist"));
+  const hasMissingTableSignal =
+    msg.includes("relation") ||
+    msg.includes("table") ||
+    (msg.includes("does not exist") && msg.includes("crawlpageaudit"));
+  const mentionsAuditModel = msg.includes("crawlpageaudit") || msg.includes("crawl page audit");
+  return hasMissingColumnSignal || hasMissingTableSignal || mentionsAuditModel;
 }
 
 async function safeAuditWrite<T>(op: () => Promise<T>): Promise<T | null> {
