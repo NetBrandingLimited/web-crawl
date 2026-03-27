@@ -2,6 +2,68 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 type RouteCtx = { params: Promise<{ id: string }> };
+type AuditRow = {
+  id: string;
+  urlHash: string;
+  url: string;
+  depth: number;
+  httpStatus: number | null;
+  contentType: string | null;
+  title: string | null;
+  titleLength: number | null;
+  metaDesc: string | null;
+  metaDescLength: number | null;
+  ogTitle: string | null;
+  ogDescription: string | null;
+  ogImage: string | null;
+  twitterCard: string | null;
+  twitterTitle: string | null;
+  h1Count: number;
+  h1Text: string | null;
+  htmlLang: string | null;
+  viewportMeta: string | null;
+  charsetMeta: string | null;
+  h2Count: number;
+  canonicalUrl: string | null;
+  robotsMeta: string | null;
+  xRobotsTag: string | null;
+  hreflangCount: number;
+  jsonLdCount: number;
+  jsonLdTypesSummary: string | null;
+  linksOutCount: number;
+  linksExternalCount: number;
+  linksNofollowCount: number;
+  linksMailtoCount: number;
+  linksTelCount: number;
+  linksHashOnlyCount: number;
+  paginationNextUrl: string | null;
+  paginationPrevUrl: string | null;
+  amphtmlUrl: string | null;
+  rssFeedUrl: string | null;
+  atomFeedUrl: string | null;
+  jsonFeedUrl: string | null;
+  responseTimeMs: number | null;
+  hstsHeader: string | null;
+  cspHeader: string | null;
+  xContentTypeOptionsHeader: string | null;
+  xFrameOptionsHeader: string | null;
+  referrerPolicyHeader: string | null;
+  permissionsPolicyHeader: string | null;
+  cacheControlHeader: string | null;
+  lastModifiedHeader: string | null;
+  etagHeader: string | null;
+  contentEncodingHeader: string | null;
+  varyHeader: string | null;
+  contentLanguageHeader: string | null;
+  faviconUrl: string | null;
+  metaRefreshContent: string | null;
+  imgCount: number;
+  imgMissingAltCount: number;
+  wordCount: number;
+  contentHash: string | null;
+  fetchedAt: Date;
+  fetchError: string | null;
+};
 
 function hasNon2xx(httpStatus: number | null) {
   return httpStatus != null && (httpStatus < 200 || httpStatus >= 300);
@@ -269,7 +331,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
     select: { urlHash: true, url: true, discoveredFromUrlHash: true, depth: true, state: true },
   });
 
-  let audits: Awaited<ReturnType<typeof prisma.crawlPageAudit.findMany>>;
+  let audits: AuditRow[];
   try {
     audits = await prisma.crawlPageAudit.findMany({
       where: { jobId },
@@ -277,7 +339,75 @@ export async function GET(req: Request, ctx: RouteCtx) {
     });
   } catch (err) {
     if (!isSchemaDriftError(err)) throw err;
-    audits = [];
+    const legacyRows = await prisma.crawlPageAudit.findMany({
+      where: { jobId },
+      select: {
+        id: true,
+        urlHash: true,
+        url: true,
+        depth: true,
+        httpStatus: true,
+        contentType: true,
+        title: true,
+        titleLength: true,
+        metaDesc: true,
+        metaDescLength: true,
+        h1Count: true,
+        h2Count: true,
+        canonicalUrl: true,
+        robotsMeta: true,
+        hreflangCount: true,
+        linksOutCount: true,
+        wordCount: true,
+        contentHash: true,
+        fetchedAt: true,
+        fetchError: true,
+      },
+      orderBy: [{ depth: "asc" }, { fetchedAt: "desc" }],
+    });
+    audits = legacyRows.map((a) => ({
+      ...a,
+      ogTitle: null,
+      ogDescription: null,
+      ogImage: null,
+      twitterCard: null,
+      twitterTitle: null,
+      h1Text: null,
+      htmlLang: null,
+      viewportMeta: null,
+      charsetMeta: null,
+      xRobotsTag: null,
+      jsonLdCount: 0,
+      jsonLdTypesSummary: null,
+      linksExternalCount: 0,
+      linksNofollowCount: 0,
+      linksMailtoCount: 0,
+      linksTelCount: 0,
+      linksHashOnlyCount: 0,
+      paginationNextUrl: null,
+      paginationPrevUrl: null,
+      amphtmlUrl: null,
+      rssFeedUrl: null,
+      atomFeedUrl: null,
+      jsonFeedUrl: null,
+      responseTimeMs: null,
+      hstsHeader: null,
+      cspHeader: null,
+      xContentTypeOptionsHeader: null,
+      xFrameOptionsHeader: null,
+      referrerPolicyHeader: null,
+      permissionsPolicyHeader: null,
+      cacheControlHeader: null,
+      lastModifiedHeader: null,
+      etagHeader: null,
+      contentEncodingHeader: null,
+      varyHeader: null,
+      contentLanguageHeader: null,
+      faviconUrl: null,
+      metaRefreshContent: null,
+      imgCount: 0,
+      imgMissingAltCount: 0,
+    }));
   }
 
   if (report === "summary") {

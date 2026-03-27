@@ -51,7 +51,18 @@ export async function GET(_req: Request, ctx: RouteCtx) {
     });
   } catch (err) {
     if (!isSchemaDriftError(err)) throw err;
-    rows = [];
+    const legacyRows = await prisma.crawlPageAudit.findMany({
+      where: { jobId },
+      select: {
+        url: true,
+        depth: true,
+        httpStatus: true,
+        robotsMeta: true,
+        fetchedAt: true,
+      },
+      orderBy: [{ depth: "asc" }, { url: "asc" }],
+    });
+    rows = legacyRows.map((r) => ({ ...r, xRobotsTag: null }));
   }
 
   const urls = rows.filter((r) => {
