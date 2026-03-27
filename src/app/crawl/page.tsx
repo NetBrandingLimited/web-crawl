@@ -56,6 +56,9 @@ type CrawlSummaryResponse = {
     canonicalIssues: number;
     headingIssues: number;
     orphanPages: number;
+    pagesWithZeroInlinks: number;
+    avgInternalInlinks: number;
+    pagesWithHighInlinks: number;
     urlIssues: number;
     parameterizedUrls: number;
     parameterVariantGroups: number;
@@ -134,6 +137,7 @@ type ExportReportKey =
   | "canonical_orphans"
   | "heading_audit"
   | "site_structure"
+  | "internal_link_graph"
   | "url_issues"
   | "parameter_variants"
   | "indexability_audit"
@@ -170,6 +174,7 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "canonical_orphans", label: "Canonical Orphans CSV" },
   { id: "heading_audit", label: "H1/H2 Audit CSV" },
   { id: "site_structure", label: "Site Structure CSV" },
+  { id: "internal_link_graph", label: "Internal Link Graph CSV" },
   { id: "url_issues", label: "URL Issues CSV" },
   { id: "parameter_variants", label: "Parameter Variants CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
@@ -470,6 +475,9 @@ export default function CrawlPage() {
               <div>Canonical issues: {reportSummary.canonicalIssues}</div>
               <div>Heading issues: {reportSummary.headingIssues}</div>
               <div>Orphan-like pages: {reportSummary.orphanPages}</div>
+              <div>Pages with zero inlinks: {reportSummary.pagesWithZeroInlinks}</div>
+              <div>Avg internal inlinks: {reportSummary.avgInternalInlinks}</div>
+              <div>Pages with high inlinks (≥5): {reportSummary.pagesWithHighInlinks}</div>
               <div>URL issues: {reportSummary.urlIssues}</div>
               <div>Parameterized URLs: {reportSummary.parameterizedUrls}</div>
               <div>Parameter variant groups: {reportSummary.parameterVariantGroups}</div>

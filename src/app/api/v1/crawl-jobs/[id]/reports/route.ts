@@ -593,6 +593,11 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const orphanPages = queueRows.filter(
       (q) => q.depth > 0 && (inlinksByHash.get(q.urlHash) ?? 0) === 0,
     ).length;
+    const totalInternalInlinks = queueRows.reduce((s, q) => s + (inlinksByHash.get(q.urlHash) ?? 0), 0);
+    const avgInternalInlinks =
+      queueRows.length > 0 ? Math.round((totalInternalInlinks / queueRows.length) * 100) / 100 : 0;
+    const pagesWithZeroInlinks = queueRows.filter((q) => (inlinksByHash.get(q.urlHash) ?? 0) === 0).length;
+    const pagesWithHighInlinks = queueRows.filter((q) => (inlinksByHash.get(q.urlHash) ?? 0) >= 5).length;
     const urlIssues = queueRows.filter((q) => {
       try {
         const u = new URL(q.url);
@@ -743,6 +748,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         canonicalIssues,
         headingIssues,
         orphanPages,
+        pagesWithZeroInlinks,
+        avgInternalInlinks,
+        pagesWithHighInlinks,
         urlIssues,
         parameterizedUrls,
         parameterVariantGroups,
@@ -1519,6 +1527,43 @@ export async function GET(req: Request, ctx: RouteCtx) {
         http_status: audit?.httpStatus ?? null,
         title: audit?.title ?? null,
         queue_state: q.state,
+        is_orphan_like: q.depth > 0 && inlinks === 0,
+      };
+    });
+  } else if (report === "internal_link_graph") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "inlinks_count",
+      "outlinks_internal_count",
+      "inlink_source_sample",
+      "is_orphan_like",
+    ];
+    const queueByHash = new Map(queueRows.map((q) => [q.urlHash, q]));
+    const sourceUrlsByTarget = new Map<string, string[]>();
+    const inlinksByHash = new Map<string, number>();
+    const outlinksBySource = new Map<string, number>();
+    for (const q of queueRows) {
+      if (!q.discoveredFromUrlHash) continue;
+      inlinksByHash.set(q.urlHash, (inlinksByHash.get(q.urlHash) ?? 0) + 1);
+      const srcCount = outlinksBySource.get(q.discoveredFromUrlHash) ?? 0;
+      outlinksBySource.set(q.discoveredFromUrlHash, srcCount + 1);
+      const srcUrl = queueByHash.get(q.discoveredFromUrlHash)?.url;
+      if (!srcUrl) continue;
+      const arr = sourceUrlsByTarget.get(q.urlHash) ?? [];
+      if (arr.length < 5 && !arr.includes(srcUrl)) arr.push(srcUrl);
+      sourceUrlsByTarget.set(q.urlHash, arr);
+    }
+    rows = queueRows.map((q) => {
+      const inlinks = inlinksByHash.get(q.urlHash) ?? 0;
+      const outlinks = outlinksBySource.get(q.urlHash) ?? 0;
+      const sample = sourceUrlsByTarget.get(q.urlHash) ?? [];
+      return {
+        url: q.url,
+        depth: q.depth,
+        inlinks_count: inlinks,
+        outlinks_internal_count: outlinks,
+        inlink_source_sample: sample.join("|"),
         is_orphan_like: q.depth > 0 && inlinks === 0,
       };
     });
