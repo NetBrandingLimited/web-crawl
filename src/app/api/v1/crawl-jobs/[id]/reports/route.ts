@@ -134,6 +134,16 @@ function normalizeUrlForCanonicalCompare(u: URL) {
   return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
 }
 
+function getCanonicalResolved(a: { url: string; canonicalUrl: string | null }): string | null {
+  if (!a.canonicalUrl) return null;
+  try {
+    const canonical = new URL(a.canonicalUrl, a.url);
+    return normalizeUrlForCanonicalCompare(canonical);
+  } catch {
+    return null;
+  }
+}
+
 function isHtml2xxAudit(a: { contentType: string | null; httpStatus: number | null }) {
   const ct = (a.contentType ?? "").toLowerCase();
   const st = a.httpStatus;
@@ -324,6 +334,43 @@ export async function GET(req: Request, ctx: RouteCtx) {
         canonicalClusteredPages += v.pages.length;
       }
     }
+    const pageToCanonical = new Map<string, string>();
+    for (const a of audits) {
+      const pageKey = (() => {
+        try {
+          return normalizeUrlForCanonicalCompare(new URL(a.url));
+        } catch {
+          return null;
+        }
+      })();
+      const canonicalKey = getCanonicalResolved(a);
+      if (!pageKey || !canonicalKey) continue;
+      pageToCanonical.set(pageKey, canonicalKey);
+    }
+    const loopNodes = new Set<string>();
+    const loopSignatures = new Set<string>();
+    for (const [start] of pageToCanonical) {
+      const indexInPath = new Map<string, number>();
+      const path: string[] = [];
+      let current: string | undefined = start;
+      while (current && pageToCanonical.has(current)) {
+        const seenAt = indexInPath.get(current);
+        if (seenAt != null) {
+          const cycleNodes = path.slice(seenAt);
+          for (const n of cycleNodes) loopNodes.add(n);
+          const sig = [...cycleNodes].sort().join("|");
+          if (sig) loopSignatures.add(sig);
+          break;
+        }
+        indexInPath.set(current, path.length);
+        path.push(current);
+        const next = pageToCanonical.get(current);
+        if (!next) break;
+        current = next;
+      }
+    }
+    const canonicalLoopedPages = loopNodes.size;
+    const canonicalLoopCount = loopSignatures.size;
     const headingIssues = audits.filter(
       (a) => a.h1Count === 0 || a.h1Count > 1 || a.h2Count === 0,
     ).length;
@@ -484,6 +531,8 @@ export async function GET(req: Request, ctx: RouteCtx) {
         canonicalizedToOther,
         canonicalClusterCount,
         canonicalClusteredPages,
+        canonicalLoopCount,
+        canonicalLoopedPages,
         pagesWithRelNext,
         pagesWithRelPrev,
         pagesWithAmphtml,
@@ -867,6 +916,56 @@ export async function GET(req: Request, ctx: RouteCtx) {
           canonical_raw: row.canonicalUrl,
           title: row.title,
         });
+      }
+    }
+  } else if (report === "canonical_loops") {
+    const pageToCanonical = new Map<string, string>();
+    const auditByPageKey = new Map<string, (typeof audits)[number]>();
+    for (const a of audits) {
+      const pageKey = (() => {
+        try {
+          return normalizeUrlForCanonicalCompare(new URL(a.url));
+        } catch {
+          return null;
+        }
+      })();
+      const canonicalKey = getCanonicalResolved(a);
+      if (!pageKey || !canonicalKey) continue;
+      pageToCanonical.set(pageKey, canonicalKey);
+      auditByPageKey.set(pageKey, a);
+    }
+    const emittedCycleSigs = new Set<string>();
+    for (const [start] of pageToCanonical) {
+      const indexInPath = new Map<string, number>();
+      const path: string[] = [];
+      let current: string | undefined = start;
+      while (current && pageToCanonical.has(current)) {
+        const seenAt = indexInPath.get(current);
+        if (seenAt != null) {
+          const cycleNodes = path.slice(seenAt);
+          const sig = [...cycleNodes].sort().join("|");
+          if (!sig || emittedCycleSigs.has(sig)) break;
+          emittedCycleSigs.add(sig);
+          for (const node of cycleNodes) {
+            const a = auditByPageKey.get(node);
+            rows.push({
+              cycle_signature: sig,
+              cycle_size: cycleNodes.length,
+              url: a?.url ?? node,
+              canonical_raw: a?.canonicalUrl ?? null,
+              canonical_resolved: pageToCanonical.get(node) ?? null,
+              http_status: a?.httpStatus ?? null,
+              depth: a?.depth ?? null,
+              title: a?.title ?? null,
+            });
+          }
+          break;
+        }
+        indexInPath.set(current, path.length);
+        path.push(current);
+        const next = pageToCanonical.get(current);
+        if (!next) break;
+        current = next;
       }
     }
   } else if (report === "heading_audit") {

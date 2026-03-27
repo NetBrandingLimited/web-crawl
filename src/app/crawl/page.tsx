@@ -97,6 +97,8 @@ type CrawlSummaryResponse = {
     canonicalizedToOther: number;
     canonicalClusterCount: number;
     canonicalClusteredPages: number;
+    canonicalLoopCount: number;
+    canonicalLoopedPages: number;
     pagesWithAmphtml: number;
     pagesWithRssFeed: number;
     pagesWithAtomFeed: number;
@@ -242,6 +244,7 @@ export default function CrawlPage() {
       | "near_duplicates"
       | "canonical_audit"
       | "canonical_clusters"
+      | "canonical_loops"
       | "heading_audit"
       | "site_structure"
       | "url_issues"
@@ -439,6 +442,14 @@ export default function CrawlPage() {
                 type="button"
               >
                 Canonical Clusters CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("canonical_loops", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Canonical Loops CSV
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
@@ -667,6 +678,8 @@ export default function CrawlPage() {
               <div>Canonicalized to other: {reportSummary.canonicalizedToOther}</div>
               <div>Canonical clusters: {reportSummary.canonicalClusterCount}</div>
               <div>Pages in canonical clusters: {reportSummary.canonicalClusteredPages}</div>
+              <div>Canonical loops: {reportSummary.canonicalLoopCount}</div>
+              <div>Pages in canonical loops: {reportSummary.canonicalLoopedPages}</div>
               <div>Pages with amphtml: {reportSummary.pagesWithAmphtml}</div>
               <div>Pages with RSS feed: {reportSummary.pagesWithRssFeed}</div>
               <div>Pages with Atom feed: {reportSummary.pagesWithAtomFeed}</div>
