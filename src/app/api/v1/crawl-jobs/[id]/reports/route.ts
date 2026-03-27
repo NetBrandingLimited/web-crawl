@@ -1326,6 +1326,16 @@ export async function GET(req: Request, ctx: RouteCtx) {
       };
     });
   } else if (report === "canonical_clusters") {
+    fallbackHeaders = [
+      "canonical_target_key",
+      "canonical_target_url",
+      "cluster_size",
+      "url",
+      "depth",
+      "http_status",
+      "canonical_raw",
+      "title",
+    ];
     const byCanonical = new Map<string, { target: string; pages: typeof audits }>();
     for (const a of audits) {
       if (!a.canonicalUrl) continue;
@@ -1547,6 +1557,12 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     });
   } else if (report === "parameter_variants") {
+    fallbackHeaders = [
+      "base_url_without_query",
+      "variant_group_size",
+      "url_variant",
+      "query_param_count",
+    ];
     const byBaseNoQuery = new Map<string, Set<string>>();
     for (const q of queueRows) {
       const base = normalizeUrlWithoutQueryAndHash(q.url);
