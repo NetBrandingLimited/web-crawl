@@ -1857,6 +1857,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
       json_feed_url: a.jsonFeedUrl,
     }));
   } else if (report === "robots_blocked") {
+    fallbackHeaders = ["url", "depth", "fetch_error"];
     rows = audits
       .filter((a) => a.fetchError === "robots_disallowed")
       .map((a) => ({
@@ -1925,7 +1926,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
   // Note: we intentionally DO NOT fallback other reports to queue URLs.
   // If an advanced report has zero audit-derived rows, exporting queue URLs
   // would make every CSV look identical/misleading.
-  if (rows.length === 0 && (!fallbackHeaders || fallbackHeaders.length === 0)) {
+  if (rows.length === 0 && (!fallbackHeaders || fallbackHeaders.length === 0) && audits.length === 0) {
     const baseRows =
       queueRows.length > 0
         ? queueRows.map((q) => ({
