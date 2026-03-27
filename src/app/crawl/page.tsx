@@ -59,6 +59,9 @@ type CrawlSummaryResponse = {
     pagesWithZeroInlinks: number;
     avgInternalInlinks: number;
     pagesWithHighInlinks: number;
+    maxCrawlDepth: number;
+    avgCrawlDepth: number;
+    deepPages: number;
     urlIssues: number;
     parameterizedUrls: number;
     parameterVariantGroups: number;
@@ -139,6 +142,8 @@ type ExportReportKey =
   | "site_structure"
   | "internal_link_graph"
   | "top_inlinked_pages"
+  | "click_depth_distribution"
+  | "crawl_pathing"
   | "url_issues"
   | "parameter_variants"
   | "indexability_audit"
@@ -177,6 +182,8 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "site_structure", label: "Site Structure CSV" },
   { id: "internal_link_graph", label: "Internal Link Graph CSV" },
   { id: "top_inlinked_pages", label: "Top Inlinked Pages CSV" },
+  { id: "click_depth_distribution", label: "Click Depth Distribution CSV" },
+  { id: "crawl_pathing", label: "Crawl Pathing CSV" },
   { id: "url_issues", label: "URL Issues CSV" },
   { id: "parameter_variants", label: "Parameter Variants CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
@@ -480,6 +487,9 @@ export default function CrawlPage() {
               <div>Pages with zero inlinks: {reportSummary.pagesWithZeroInlinks}</div>
               <div>Avg internal inlinks: {reportSummary.avgInternalInlinks}</div>
               <div>Pages with high inlinks (≥5): {reportSummary.pagesWithHighInlinks}</div>
+              <div>Max crawl depth: {reportSummary.maxCrawlDepth}</div>
+              <div>Avg crawl depth: {reportSummary.avgCrawlDepth}</div>
+              <div>Deep pages (depth ≥3): {reportSummary.deepPages}</div>
               <div>URL issues: {reportSummary.urlIssues}</div>
               <div>Parameterized URLs: {reportSummary.parameterizedUrls}</div>
               <div>Parameter variant groups: {reportSummary.parameterVariantGroups}</div>

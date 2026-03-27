@@ -598,6 +598,12 @@ export async function GET(req: Request, ctx: RouteCtx) {
       queueRows.length > 0 ? Math.round((totalInternalInlinks / queueRows.length) * 100) / 100 : 0;
     const pagesWithZeroInlinks = queueRows.filter((q) => (inlinksByHash.get(q.urlHash) ?? 0) === 0).length;
     const pagesWithHighInlinks = queueRows.filter((q) => (inlinksByHash.get(q.urlHash) ?? 0) >= 5).length;
+    const maxCrawlDepth = queueRows.reduce((m, q) => Math.max(m, q.depth), 0);
+    const avgCrawlDepth =
+      queueRows.length > 0
+        ? Math.round((queueRows.reduce((s, q) => s + q.depth, 0) / queueRows.length) * 100) / 100
+        : 0;
+    const deepPages = queueRows.filter((q) => q.depth >= 3).length;
     const urlIssues = queueRows.filter((q) => {
       try {
         const u = new URL(q.url);
@@ -751,6 +757,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagesWithZeroInlinks,
         avgInternalInlinks,
         pagesWithHighInlinks,
+        maxCrawlDepth,
+        avgCrawlDepth,
+        deepPages,
         urlIssues,
         parameterizedUrls,
         parameterVariantGroups,
@@ -1610,6 +1619,53 @@ export async function GET(req: Request, ctx: RouteCtx) {
         return a.url.localeCompare(b.url);
       });
     rows = ranked.map((r, idx) => ({ ...r, inlink_rank: idx + 1 }));
+  } else if (report === "click_depth_distribution") {
+    fallbackHeaders = [
+      "depth",
+      "url_count",
+      "share_percent",
+      "cumulative_url_count",
+      "cumulative_share_percent",
+    ];
+    const byDepth = new Map<number, number>();
+    for (const q of queueRows) {
+      byDepth.set(q.depth, (byDepth.get(q.depth) ?? 0) + 1);
+    }
+    const depths = [...byDepth.keys()].sort((a, b) => a - b);
+    const total = queueRows.length;
+    let cumulative = 0;
+    rows = depths.map((d) => {
+      const count = byDepth.get(d) ?? 0;
+      cumulative += count;
+      return {
+        depth: d,
+        url_count: count,
+        share_percent: total > 0 ? Math.round((count / total) * 10000) / 100 : 0,
+        cumulative_url_count: cumulative,
+        cumulative_share_percent: total > 0 ? Math.round((cumulative / total) * 10000) / 100 : 0,
+      };
+    });
+  } else if (report === "crawl_pathing") {
+    fallbackHeaders = [
+      "source_url",
+      "source_depth",
+      "target_url",
+      "target_depth",
+      "edge_type",
+    ];
+    const queueByHash = new Map(queueRows.map((q) => [q.urlHash, q]));
+    rows = queueRows
+      .filter((q) => !!q.discoveredFromUrlHash)
+      .map((q) => {
+        const source = queueByHash.get(q.discoveredFromUrlHash!);
+        return {
+          source_url: source?.url ?? null,
+          source_depth: source?.depth ?? null,
+          target_url: q.url,
+          target_depth: q.depth,
+          edge_type: "internal_link_discovery",
+        };
+      });
   } else if (report === "url_issues") {
     rows = queueRows.map((q) => {
       const issues: string[] = [];
