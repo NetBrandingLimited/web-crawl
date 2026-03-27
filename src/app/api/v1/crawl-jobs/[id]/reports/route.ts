@@ -143,6 +143,38 @@ function normalizeUrlWithoutQueryAndHash(rawUrl: string): string {
   }
 }
 
+function classifyIndexability(a: {
+  url: string;
+  canonicalUrl: string | null;
+  httpStatus: number | null;
+  robotsMeta: string | null;
+  xRobotsTag: string | null;
+}) {
+  const blockedByStatus = a.httpStatus == null ? false : a.httpStatus < 200 || a.httpStatus >= 300;
+  const blockedByNoindex = hasRobotsNoindex(a.robotsMeta, a.xRobotsTag);
+  let blockedByCanonicalElsewhere = false;
+  let canonicalResolved: string | null = null;
+  if (a.canonicalUrl) {
+    try {
+      const page = new URL(a.url);
+      const canonical = new URL(a.canonicalUrl, a.url);
+      canonicalResolved = canonical.toString();
+      blockedByCanonicalElsewhere =
+        normalizeUrlForCanonicalCompare(page) !== normalizeUrlForCanonicalCompare(canonical);
+    } catch {
+      blockedByCanonicalElsewhere = true;
+    }
+  }
+  const isIndexableStrict = !blockedByStatus && !blockedByNoindex && !blockedByCanonicalElsewhere;
+  return {
+    isIndexableStrict,
+    blockedByStatus,
+    blockedByNoindex,
+    blockedByCanonicalElsewhere,
+    canonicalResolved,
+  };
+}
+
 function getCanonicalResolved(a: { url: string; canonicalUrl: string | null }): string | null {
   if (!a.canonicalUrl) return null;
   try {
@@ -450,6 +482,19 @@ export async function GET(req: Request, ctx: RouteCtx) {
       const okStatus = a.httpStatus == null || (a.httpStatus >= 200 && a.httpStatus < 300);
       return okStatus && !hasNoindex;
     }).length;
+    let indexableStrict = 0;
+    let nonIndexable = 0;
+    let nonIndexableByStatus = 0;
+    let nonIndexableByNoindex = 0;
+    let nonIndexableByCanonicalElsewhere = 0;
+    for (const a of audits) {
+      const i = classifyIndexability(a);
+      if (i.isIndexableStrict) indexableStrict += 1;
+      else nonIndexable += 1;
+      if (i.blockedByStatus) nonIndexableByStatus += 1;
+      if (i.blockedByNoindex) nonIndexableByNoindex += 1;
+      if (i.blockedByCanonicalElsewhere) nonIndexableByCanonicalElsewhere += 1;
+    }
     const pagesWithJsonLd = audits.filter((a) => a.jsonLdCount > 0).length;
     const robotsTxtBlocked = audits.filter((a) => a.fetchError === "robots_disallowed").length;
     const timings = audits
@@ -546,6 +591,11 @@ export async function GET(req: Request, ctx: RouteCtx) {
         directivesIssues,
         hreflangIssues,
         indexableUrls,
+        indexableStrict,
+        nonIndexable,
+        nonIndexableByStatus,
+        nonIndexableByNoindex,
+        nonIndexableByCanonicalElsewhere,
         securityIssues,
         contentQualityIssues,
         brokenLinksWithSources,
@@ -1171,6 +1221,28 @@ export async function GET(req: Request, ctx: RouteCtx) {
         });
       }
     }
+  } else if (report === "indexability_audit") {
+    rows = audits.map((a) => {
+      const i = classifyIndexability(a);
+      const reasons: string[] = [];
+      if (i.blockedByStatus) reasons.push("status_not_2xx");
+      if (i.blockedByNoindex) reasons.push("noindex_directive");
+      if (i.blockedByCanonicalElsewhere) reasons.push("canonical_elsewhere");
+      return {
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        robots_meta: a.robotsMeta,
+        x_robots_tag: a.xRobotsTag,
+        canonical_raw: a.canonicalUrl,
+        canonical_resolved: i.canonicalResolved,
+        is_indexable_strict: i.isIndexableStrict,
+        blocked_by_status: i.blockedByStatus,
+        blocked_by_noindex: i.blockedByNoindex,
+        blocked_by_canonical_elsewhere: i.blockedByCanonicalElsewhere,
+        block_reasons: reasons.join("|"),
+      };
+    });
   } else if (report === "directives_audit") {
     rows = audits.map((a) => {
       const directives = robotsDirectiveTokens(a.robotsMeta, a.xRobotsTag);

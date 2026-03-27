@@ -63,6 +63,11 @@ type CrawlSummaryResponse = {
     directivesIssues: number;
     hreflangIssues: number;
     indexableUrls: number;
+    indexableStrict: number;
+    nonIndexable: number;
+    nonIndexableByStatus: number;
+    nonIndexableByNoindex: number;
+    nonIndexableByCanonicalElsewhere: number;
     securityIssues: number;
     contentQualityIssues: number;
     brokenLinksWithSources: number;
@@ -254,6 +259,7 @@ export default function CrawlPage() {
       | "site_structure"
       | "url_issues"
       | "parameter_variants"
+      | "indexability_audit"
       | "directives_audit"
       | "robots_blocked"
       | "hreflang_audit"
@@ -499,6 +505,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("indexability_audit", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Indexability Audit CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("directives_audit", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -666,6 +680,13 @@ export default function CrawlPage() {
               <div>Directive issues: {reportSummary.directivesIssues}</div>
               <div>hreflang issues: {reportSummary.hreflangIssues}</div>
               <div>Indexable URLs: {reportSummary.indexableUrls}</div>
+              <div>Strict indexable: {reportSummary.indexableStrict}</div>
+              <div>Non-indexable: {reportSummary.nonIndexable}</div>
+              <div>Non-indexable by status: {reportSummary.nonIndexableByStatus}</div>
+              <div>Non-indexable by noindex: {reportSummary.nonIndexableByNoindex}</div>
+              <div>
+                Non-indexable by canonical elsewhere: {reportSummary.nonIndexableByCanonicalElsewhere}
+              </div>
               <div>Security issues: {reportSummary.securityIssues}</div>
               <div>Content issues: {reportSummary.contentQualityIssues}</div>
               <div>Broken links w/source: {reportSummary.brokenLinksWithSources}</div>
