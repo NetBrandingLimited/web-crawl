@@ -333,6 +333,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   httpStatus: null,
                   fetchedAt: new Date(),
                 },
+                select: { id: true },
               }),
             );
             await prisma.crawlQueue.update({
@@ -445,13 +446,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             fetchError: null,
             fetchedAt: new Date(),
           },
+          select: { id: true },
         }),
       );
 
       // Best-effort enrichment: if new columns don't exist yet, keep the base audit row.
       await safeAuditWrite(() =>
-        prisma.crawlPageAudit.update({
-          where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
+        prisma.crawlPageAudit.updateMany({
+          where: { jobId: item.jobId, urlHash },
           data: {
             responseTimeMs,
             ...securityHeaders,
@@ -666,8 +668,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             : jsonLdTypesSorted.slice(0, 40).join("|").slice(0, 1024);
 
         await safeAuditWrite(() =>
-          prisma.crawlPageAudit.update({
-            where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
+          prisma.crawlPageAudit.updateMany({
+            where: { jobId: item.jobId, urlHash },
             data: {
               title,
               titleLength: title?.length ?? null,
@@ -714,8 +716,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       } else {
         await safeAuditWrite(() =>
-          prisma.crawlPageAudit.update({
-            where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
+          prisma.crawlPageAudit.updateMany({
+            where: { jobId: item.jobId, urlHash },
             data: {
               xRobotsTag,
               jsonLdCount: 0,
@@ -776,6 +778,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             fetchError: String(err).slice(0, 500),
             fetchedAt: new Date(),
           },
+          select: { id: true },
         }),
       );
       results.push({ url: item.url, ok: false, status: 0, error: String(err) });
