@@ -65,6 +65,16 @@ export async function GET(_req: Request, ctx: RouteCtx) {
     rows = legacyRows.map((r) => ({ ...r, xRobotsTag: null }));
   }
 
+  if (rows.length === 0) {
+    return NextResponse.json(
+      {
+        error: "no_audit_data",
+        message: "No audit data yet for this job. Run worker or start a new crawl, then refresh.",
+      },
+      { status: 409 },
+    );
+  }
+
   const urls = rows.filter((r) => {
     const combined = `${r.robotsMeta ?? ""} ${r.xRobotsTag ?? ""}`.toLowerCase();
     const hasNoindex = combined.includes("noindex") || combined.includes("none");
@@ -72,19 +82,7 @@ export async function GET(_req: Request, ctx: RouteCtx) {
     return okStatus && !hasNoindex;
   });
 
-  const fallbackQueueUrls =
-    urls.length === 0
-      ? await prisma.crawlQueue.findMany({
-          where: { jobId },
-          select: { url: true, depth: true },
-          orderBy: [{ depth: "asc" }, { url: "asc" }],
-        })
-      : [];
-
-  const xmlRows =
-    urls.length > 0
-      ? urls.map((r) => ({ url: r.url, depth: r.depth, lastmod: r.fetchedAt }))
-      : fallbackQueueUrls.map((q) => ({ url: q.url, depth: q.depth, lastmod: new Date() }));
+  const xmlRows = urls.map((r) => ({ url: r.url, depth: r.depth, lastmod: r.fetchedAt }));
 
   const body = xmlRows
     .map((r) => {

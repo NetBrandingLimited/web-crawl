@@ -326,12 +326,20 @@ export default function CrawlPage() {
 
   function exportReport(report: ExportReportKey, format: "csv" | "excel") {
     if (!jobId) return;
+    if (!reportSummary || reportSummary.urls === 0) {
+      setError("No audit data yet for this job. Run worker or start a new crawl, then refresh.");
+      return;
+    }
     const u = `/api/v1/crawl-jobs/${jobId}/reports?report=${report}&format=${format}`;
     triggerDownload(u);
   }
 
   function exportSitemapXml() {
     if (!jobId) return;
+    if (!reportSummary || reportSummary.urls === 0) {
+      setError("No audit data yet for this job. Run worker or start a new crawl, then refresh.");
+      return;
+    }
     const u = `/api/v1/crawl-jobs/${jobId}/sitemap`;
     triggerDownload(u);
   }
