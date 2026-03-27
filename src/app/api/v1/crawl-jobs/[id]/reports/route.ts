@@ -8,6 +8,7 @@ function hasNon2xx(httpStatus: number | null) {
 }
 
 function classifyIssues(row: {
+  contentType: string | null;
   httpStatus: number | null;
   title: string | null;
   metaDesc: string | null;
@@ -18,6 +19,8 @@ function classifyIssues(row: {
   robotsMeta: string | null;
   xRobotsTag: string | null;
   responseTimeMs: number | null;
+  htmlLang: string | null;
+  viewportMeta: string | null;
 }) {
   const issues: string[] = [];
   if (row.fetchError) {
@@ -44,6 +47,14 @@ function classifyIssues(row: {
   ) {
     issues.push("slow_response");
   }
+  const ct = (row.contentType ?? "").toLowerCase();
+  const html2xx =
+    ct.includes("text/html") &&
+    row.httpStatus != null &&
+    row.httpStatus >= 200 &&
+    row.httpStatus < 300;
+  if (html2xx && !row.htmlLang) issues.push("missing_html_lang");
+  if (html2xx && !row.viewportMeta) issues.push("missing_viewport_meta");
   return issues;
 }
 
@@ -227,6 +238,20 @@ export async function GET(req: Request, ctx: RouteCtx) {
       if (arr.length >= 2) duplicateMetaDescriptions += arr.length;
     }
 
+    let duplicateH1 = 0;
+    const h1ByKey = new Map<string, typeof audits>();
+    for (const a of audits) {
+      if (!a.h1Text) continue;
+      const key = normalizeDupKey(a.h1Text);
+      if (!key) continue;
+      const arr = h1ByKey.get(key) ?? [];
+      arr.push(a);
+      h1ByKey.set(key, arr);
+    }
+    for (const arr of h1ByKey.values()) {
+      if (arr.length >= 2) duplicateH1 += arr.length;
+    }
+
     // Near-duplicate count based on title + meta-description token similarity.
     const nearDupUrlHashes = new Set<string>();
     const docs = audits
@@ -318,6 +343,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const pagesMissingOgTitle = html2xxAudits.filter((a) => !a.ogTitle).length;
     const pagesWithOgImage = html2xxAudits.filter((a) => !!a.ogImage).length;
     const pagesMissingTwitterCard = html2xxAudits.filter((a) => !a.twitterCard).length;
+    const pagesMissingHtmlLang = html2xxAudits.filter((a) => !a.htmlLang).length;
+    const pagesMissingViewport = html2xxAudits.filter((a) => !a.viewportMeta).length;
+    const pagesWithNofollowLinks = audits.filter((a) => a.linksNofollowCount > 0).length;
     const https2xxAudits = audits.filter(isHttps2xxAudit);
     const httpsMissingHsts = https2xxAudits.filter((a) => !a.hstsHeader).length;
     const httpsMissingXContentTypeOptions = https2xxAudits.filter(
@@ -356,6 +384,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         exactDuplicates,
         duplicateTitles,
         duplicateMetaDescriptions,
+        duplicateH1,
         nearDuplicates,
         canonicalIssues,
         headingIssues,
@@ -378,6 +407,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagesMissingOgTitle,
         pagesWithOgImage,
         pagesMissingTwitterCard,
+        pagesMissingHtmlLang,
+        pagesMissingViewport,
+        pagesWithNofollowLinks,
         httpsMissingHsts,
         httpsMissingXContentTypeOptions,
         httpsMissingXFrameOptions,
@@ -404,6 +436,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
       twitter_card: a.twitterCard,
       twitter_title: a.twitterTitle,
       h1_count: a.h1Count,
+      h1_text: a.h1Text,
+      html_lang: a.htmlLang,
+      viewport_meta: a.viewportMeta,
+      charset_meta: a.charsetMeta,
       h2_count: a.h2Count,
       canonical_url: a.canonicalUrl,
       robots_meta: a.robotsMeta,
@@ -413,6 +449,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
       json_ld_types: a.jsonLdTypesSummary,
       links_out_count: a.linksOutCount,
       links_external_count: a.linksExternalCount,
+      links_nofollow_count: a.linksNofollowCount,
       response_time_ms: a.responseTimeMs,
       hsts: a.hstsHeader,
       csp: a.cspHeader,
@@ -571,6 +608,31 @@ export async function GET(req: Request, ctx: RouteCtx) {
         });
       }
     }
+  } else if (report === "duplicate_h1") {
+    const byH1 = new Map<string, typeof audits>();
+    for (const a of audits) {
+      if (!a.h1Text) continue;
+      const key = normalizeDupKey(a.h1Text);
+      if (!key) continue;
+      const arr = byH1.get(key) ?? [];
+      arr.push(a);
+      byH1.set(key, arr);
+    }
+    for (const [key, list] of byH1) {
+      if (list.length < 2) continue;
+      for (const row of list) {
+        rows.push({
+          duplicate_h1_key: key,
+          duplicate_group_size: list.length,
+          url: row.url,
+          depth: row.depth,
+          http_status: row.httpStatus,
+          h1_text: row.h1Text,
+          h1_count: row.h1Count,
+          title: row.title,
+        });
+      }
+    }
   } else if (report === "duplicate_meta_descriptions") {
     const byMeta = new Map<string, typeof audits>();
     for (const a of audits) {
@@ -680,6 +742,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         depth: a.depth,
         http_status: a.httpStatus,
         h1_count: a.h1Count,
+        h1_text: a.h1Text,
         h2_count: a.h2Count,
         title: a.title,
         title_length: a.titleLength,
@@ -958,6 +1021,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
       response_time_ms: a.responseTimeMs,
       links_out_count: a.linksOutCount,
       links_external_count: a.linksExternalCount,
+      links_nofollow_count: a.linksNofollowCount,
       word_count: a.wordCount,
     }));
   } else if (report === "robots_blocked") {

@@ -51,6 +51,7 @@ type CrawlSummaryResponse = {
     exactDuplicates: number;
     duplicateTitles: number;
     duplicateMetaDescriptions: number;
+    duplicateH1: number;
     nearDuplicates: number;
     canonicalIssues: number;
     headingIssues: number;
@@ -73,6 +74,9 @@ type CrawlSummaryResponse = {
     pagesMissingOgTitle: number;
     pagesWithOgImage: number;
     pagesMissingTwitterCard: number;
+    pagesMissingHtmlLang: number;
+    pagesMissingViewport: number;
+    pagesWithNofollowLinks: number;
     httpsMissingHsts: number;
     httpsMissingXContentTypeOptions: number;
     httpsMissingXFrameOptions: number;
@@ -209,6 +213,7 @@ export default function CrawlPage() {
       | "duplicates"
       | "redirects"
       | "duplicate_titles"
+      | "duplicate_h1"
       | "duplicate_meta_descriptions"
       | "near_duplicates"
       | "canonical_audit"
@@ -364,6 +369,14 @@ export default function CrawlPage() {
                 type="button"
               >
                 Duplicate Titles CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("duplicate_h1", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Duplicate H1 CSV
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
@@ -529,6 +542,7 @@ export default function CrawlPage() {
               <div>Missing H1: {reportSummary.missingH1}</div>
               <div>Exact duplicates: {reportSummary.exactDuplicates}</div>
               <div>Duplicate titles: {reportSummary.duplicateTitles}</div>
+              <div>Duplicate H1: {reportSummary.duplicateH1}</div>
               <div>Duplicate meta desc: {reportSummary.duplicateMetaDescriptions}</div>
               <div>Near duplicates: {reportSummary.nearDuplicates}</div>
               <div>Canonical issues: {reportSummary.canonicalIssues}</div>
@@ -552,6 +566,9 @@ export default function CrawlPage() {
               <div>HTML 2xx missing og:title: {reportSummary.pagesMissingOgTitle}</div>
               <div>HTML 2xx with og:image: {reportSummary.pagesWithOgImage}</div>
               <div>HTML 2xx missing twitter:card: {reportSummary.pagesMissingTwitterCard}</div>
+              <div>HTML 2xx missing lang: {reportSummary.pagesMissingHtmlLang}</div>
+              <div>HTML 2xx missing viewport: {reportSummary.pagesMissingViewport}</div>
+              <div>Pages w/ nofollow links: {reportSummary.pagesWithNofollowLinks}</div>
               <div>HTTPS 2xx missing HSTS: {reportSummary.httpsMissingHsts}</div>
               <div>HTTPS 2xx missing X-Content-Type-Options: {reportSummary.httpsMissingXContentTypeOptions}</div>
               <div>HTTPS 2xx missing X-Frame-Options: {reportSummary.httpsMissingXFrameOptions}</div>

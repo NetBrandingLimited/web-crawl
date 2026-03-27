@@ -497,16 +497,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const twitterTitle = capLen(cleanText($('meta[name="twitter:title"]').attr("content")), 512);
         const canonicalUrl = cleanText($("link[rel='canonical']").attr("href"));
         const robotsMeta = cleanText($("meta[name='robots']").attr("content"));
+        const htmlLang = capLen(cleanText($("html").attr("lang")), 64);
+        const viewportMeta = capLen(cleanText($('meta[name="viewport"]').attr("content")), 512);
+        let charsetMeta = capLen(cleanText($("meta[charset]").first().attr("charset")), 64);
+        if (!charsetMeta) {
+          $("meta[http-equiv]").each((_, el) => {
+            if (charsetMeta) return;
+            const he = $(el).attr("http-equiv")?.toLowerCase();
+            if (he !== "content-type") return;
+            const content = $(el).attr("content");
+            if (!content) return;
+            const m = /charset\s*=\s*([^;]+)/i.exec(content);
+            if (m) {
+              charsetMeta = capLen(cleanText(m[1].replace(/^["']|["']$/g, "")), 64);
+            }
+          });
+        }
         const h1Count = $("h1").length;
+        const h1Text = capLen(cleanText($("h1").first().text()), 512);
         const h2Count = $("h2").length;
         const hreflangCount = $("link[rel='alternate'][hreflang]").length;
         const linksOutCount = $("a[href]").length;
         const seedHost = new URL(item.job.seedUrl).hostname.toLowerCase();
         let linksExternalCount = 0;
+        let linksNofollowCount = 0;
         $("a[href]").each((_, el) => {
           try {
             const href = $(el).attr("href");
             if (href == null || href === "") return;
+            const rel = $(el).attr("rel");
+            if (rel) {
+              const parts = rel.toLowerCase().split(/\s+/).filter(Boolean);
+              if (parts.includes("nofollow")) linksNofollowCount += 1;
+            }
             const abs = new URL(href, item.url);
             if (abs.protocol !== "http:" && abs.protocol !== "https:") return;
             if (abs.hostname.toLowerCase() !== seedHost) linksExternalCount += 1;
@@ -554,7 +577,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               ogImage,
               twitterCard,
               twitterTitle,
+              htmlLang,
+              viewportMeta,
+              charsetMeta,
               h1Count,
+              h1Text,
               h2Count,
               canonicalUrl,
               robotsMeta,
@@ -562,6 +589,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               hreflangCount,
               linksOutCount,
               linksExternalCount,
+              linksNofollowCount,
               imgCount,
               imgMissingAltCount,
               jsonLdCount,
@@ -581,6 +609,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               jsonLdCount: 0,
               jsonLdTypesSummary: null,
               linksExternalCount: 0,
+              linksNofollowCount: 0,
+              htmlLang: null,
+              viewportMeta: null,
+              charsetMeta: null,
+              h1Text: null,
               ogTitle: null,
               ogDescription: null,
               ogImage: null,
