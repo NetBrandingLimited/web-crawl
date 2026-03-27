@@ -162,6 +162,7 @@ type ExportReportKey =
   | "response_time_buckets"
   | "url_issues"
   | "parameter_variants"
+  | "parameter_inventory"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -208,6 +209,7 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "response_time_buckets", label: "Response Time Buckets CSV" },
   { id: "url_issues", label: "URL Issues CSV" },
   { id: "parameter_variants", label: "Parameter Variants CSV" },
+  { id: "parameter_inventory", label: "Parameter Inventory CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

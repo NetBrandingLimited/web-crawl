@@ -2004,6 +2004,66 @@ export async function GET(req: Request, ctx: RouteCtx) {
         });
       }
     }
+  } else if (report === "parameter_inventory") {
+    fallbackHeaders = [
+      "parameter_name",
+      "urls_with_parameter",
+      "total_occurrences",
+      "unique_values_count",
+      "sample_values",
+      "sample_urls",
+    ];
+    const byParam = new Map<
+      string,
+      {
+        urlSet: Set<string>;
+        occurrences: number;
+        values: Set<string>;
+        sampleUrls: string[];
+      }
+    >();
+    for (const q of queueRows) {
+      try {
+        const u = new URL(q.url);
+        if (!u.search || u.searchParams.size === 0) continue;
+        const seenInThisUrl = new Set<string>();
+        for (const [key, value] of u.searchParams.entries()) {
+          const param = key.trim();
+          if (!param) continue;
+          const hit = byParam.get(param) ?? {
+            urlSet: new Set<string>(),
+            occurrences: 0,
+            values: new Set<string>(),
+            sampleUrls: [],
+          };
+          hit.occurrences += 1;
+          hit.values.add(value.slice(0, 80));
+          if (!seenInThisUrl.has(param)) {
+            hit.urlSet.add(q.url);
+            if (hit.sampleUrls.length < 5) hit.sampleUrls.push(q.url);
+            seenInThisUrl.add(param);
+          }
+          byParam.set(param, hit);
+        }
+      } catch {
+        /* ignore invalid URL */
+      }
+    }
+    rows = [...byParam.entries()]
+      .map(([parameter_name, hit]) => ({
+        parameter_name,
+        urls_with_parameter: hit.urlSet.size,
+        total_occurrences: hit.occurrences,
+        unique_values_count: hit.values.size,
+        sample_values: [...hit.values].slice(0, 5).join("|"),
+        sample_urls: hit.sampleUrls.join("|"),
+      }))
+      .sort((a, b) => {
+        if ((b.urls_with_parameter as number) !== (a.urls_with_parameter as number)) {
+          return (b.urls_with_parameter as number) - (a.urls_with_parameter as number);
+        }
+        return String(a.parameter_name).localeCompare(String(b.parameter_name));
+      });
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);
