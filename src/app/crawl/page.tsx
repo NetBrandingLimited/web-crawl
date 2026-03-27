@@ -328,9 +328,9 @@ export default function CrawlPage() {
 
   function exportReport(report: ExportReportKey, format: "csv" | "excel") {
     if (!jobId) return;
-    const fetched = status?.stats.fetched ?? 0;
-    if (fetched === 0) {
-      setError("No audit data yet for this job. Run worker or start a new crawl, then refresh.");
+    const discovered = urls.length;
+    if (discovered === 0) {
+      setError("No crawl URLs found for this job yet. Start/continue crawl, then refresh.");
       return;
     }
     const u = `/api/v1/crawl-jobs/${jobId}/reports?report=${report}&format=${format}`;
@@ -339,9 +339,9 @@ export default function CrawlPage() {
 
   function exportSitemapXml() {
     if (!jobId) return;
-    const fetched = status?.stats.fetched ?? 0;
-    if (fetched === 0) {
-      setError("No audit data yet for this job. Run worker or start a new crawl, then refresh.");
+    const discovered = urls.length;
+    if (discovered === 0) {
+      setError("No crawl URLs found for this job yet. Start/continue crawl, then refresh.");
       return;
     }
     const u = `/api/v1/crawl-jobs/${jobId}/sitemap`;

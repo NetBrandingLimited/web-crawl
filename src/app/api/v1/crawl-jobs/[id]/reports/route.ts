@@ -410,16 +410,6 @@ export async function GET(req: Request, ctx: RouteCtx) {
     }));
   }
 
-  if (report !== "summary" && audits.length === 0) {
-    return NextResponse.json(
-      {
-        error: "no_audit_data",
-        message: "No audit data yet for this job. Run worker or start a new crawl, then refresh.",
-      },
-      { status: 409 },
-    );
-  }
-
   if (report === "summary") {
     const broken = audits.filter((a) => a.httpStatus != null && a.httpStatus >= 400).length;
     const redirects = audits.filter((a) => a.httpStatus != null && a.httpStatus >= 300 && a.httpStatus < 400).length;
@@ -1798,6 +1788,17 @@ export async function GET(req: Request, ctx: RouteCtx) {
         };
       })
       .filter((r) => String(r.issues).length > 0 || r.has_non_2xx || r.fetch_error);
+  }
+
+  // Fallback for schema-drift / delayed audit writes:
+  // return discovered queue URLs so exports are still usable.
+  if (report !== "summary" && rows.length === 0 && queueRows.length > 0) {
+    rows = queueRows.map((q) => ({
+      url: q.url,
+      depth: q.depth,
+      queue_state: q.state,
+    }));
+    fallbackHeaders = ["url", "depth", "queue_state"];
   }
 
   if (format === "excel") {
