@@ -57,6 +57,9 @@ type CrawlSummaryResponse = {
     headingIssues: number;
     orphanPages: number;
     urlIssues: number;
+    parameterizedUrls: number;
+    parameterVariantGroups: number;
+    parameterVariantUrls: number;
     directivesIssues: number;
     hreflangIssues: number;
     indexableUrls: number;
@@ -248,6 +251,7 @@ export default function CrawlPage() {
       | "heading_audit"
       | "site_structure"
       | "url_issues"
+      | "parameter_variants"
       | "directives_audit"
       | "robots_blocked"
       | "hreflang_audit"
@@ -477,6 +481,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("parameter_variants", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Parameter Variants CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("directives_audit", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -638,6 +650,9 @@ export default function CrawlPage() {
               <div>Heading issues: {reportSummary.headingIssues}</div>
               <div>Orphan-like pages: {reportSummary.orphanPages}</div>
               <div>URL issues: {reportSummary.urlIssues}</div>
+              <div>Parameterized URLs: {reportSummary.parameterizedUrls}</div>
+              <div>Parameter variant groups: {reportSummary.parameterVariantGroups}</div>
+              <div>URLs in parameter groups: {reportSummary.parameterVariantUrls}</div>
               <div>Directive issues: {reportSummary.directivesIssues}</div>
               <div>hreflang issues: {reportSummary.hreflangIssues}</div>
               <div>Indexable URLs: {reportSummary.indexableUrls}</div>

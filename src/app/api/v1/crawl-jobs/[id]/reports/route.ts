@@ -134,6 +134,15 @@ function normalizeUrlForCanonicalCompare(u: URL) {
   return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
 }
 
+function normalizeUrlWithoutQueryAndHash(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "") || "/"}`;
+  } catch {
+    return rawUrl.split("#")[0].split("?")[0];
+  }
+}
+
 function getCanonicalResolved(a: { url: string; canonicalUrl: string | null }): string | null {
   if (!a.canonicalUrl) return null;
   try {
@@ -399,6 +408,28 @@ export async function GET(req: Request, ctx: RouteCtx) {
         return true;
       }
     }).length;
+    const parameterizedUrls = queueRows.filter((q) => {
+      try {
+        return new URL(q.url).searchParams.size > 0;
+      } catch {
+        return false;
+      }
+    }).length;
+    const byBaseNoQuery = new Map<string, Set<string>>();
+    for (const q of queueRows) {
+      const base = normalizeUrlWithoutQueryAndHash(q.url);
+      const set = byBaseNoQuery.get(base) ?? new Set<string>();
+      set.add(q.url);
+      byBaseNoQuery.set(base, set);
+    }
+    let parameterVariantGroups = 0;
+    let parameterVariantUrls = 0;
+    for (const s of byBaseNoQuery.values()) {
+      if (s.size >= 2) {
+        parameterVariantGroups += 1;
+        parameterVariantUrls += s.size;
+      }
+    }
     const directivesIssues = audits.filter((a) =>
       hasRestrictiveRobotsDirectives(a.robotsMeta, a.xRobotsTag),
     ).length;
@@ -498,6 +529,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         headingIssues,
         orphanPages,
         urlIssues,
+        parameterizedUrls,
+        parameterVariantGroups,
+        parameterVariantUrls,
         directivesIssues,
         hreflangIssues,
         indexableUrls,
@@ -1063,6 +1097,31 @@ export async function GET(req: Request, ctx: RouteCtx) {
         };
       }
     });
+  } else if (report === "parameter_variants") {
+    const byBaseNoQuery = new Map<string, Set<string>>();
+    for (const q of queueRows) {
+      const base = normalizeUrlWithoutQueryAndHash(q.url);
+      const set = byBaseNoQuery.get(base) ?? new Set<string>();
+      set.add(q.url);
+      byBaseNoQuery.set(base, set);
+    }
+    for (const [baseUrl, variants] of byBaseNoQuery) {
+      if (variants.size < 2) continue;
+      for (const variant of variants) {
+        let queryParamCount = 0;
+        try {
+          queryParamCount = new URL(variant).searchParams.size;
+        } catch {
+          queryParamCount = 0;
+        }
+        rows.push({
+          base_url_without_query: baseUrl,
+          variant_group_size: variants.size,
+          url_variant: variant,
+          query_param_count: queryParamCount,
+        });
+      }
+    }
   } else if (report === "directives_audit") {
     rows = audits.map((a) => {
       const directives = robotsDirectiveTokens(a.robotsMeta, a.xRobotsTag);
