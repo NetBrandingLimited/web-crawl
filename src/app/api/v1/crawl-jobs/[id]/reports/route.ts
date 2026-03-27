@@ -424,6 +424,14 @@ export async function GET(req: Request, ctx: RouteCtx) {
   if (report === "summary") {
     const broken = audits.filter((a) => a.httpStatus != null && a.httpStatus >= 400).length;
     const redirects = audits.filter((a) => a.httpStatus != null && a.httpStatus >= 300 && a.httpStatus < 400).length;
+    const status2xx = audits.filter((a) => a.httpStatus != null && a.httpStatus >= 200 && a.httpStatus < 300).length;
+    const status3xx = audits.filter((a) => a.httpStatus != null && a.httpStatus >= 300 && a.httpStatus < 400).length;
+    const status4xx = audits.filter((a) => a.httpStatus != null && a.httpStatus >= 400 && a.httpStatus < 500).length;
+    const status5xx = audits.filter((a) => a.httpStatus != null && a.httpStatus >= 500 && a.httpStatus < 600).length;
+    const statusOther = audits.filter(
+      (a) => a.httpStatus != null && (a.httpStatus < 200 || a.httpStatus >= 600),
+    ).length;
+    const statusUnknown = audits.filter((a) => a.httpStatus == null).length;
     const missingTitles = audits.filter((a) => !a.title).length;
     const missingMetaDescriptions = audits.filter((a) => !a.metaDesc).length;
     const missingH1 = audits.filter((a) => a.h1Count === 0).length;
@@ -743,6 +751,12 @@ export async function GET(req: Request, ctx: RouteCtx) {
         urls: Math.max(audits.length, queueRows.length),
         broken,
         redirects,
+        status2xx,
+        status3xx,
+        status4xx,
+        status5xx,
+        statusOther,
+        statusUnknown,
         missingTitles,
         missingMetaDescriptions,
         missingH1,
@@ -1765,6 +1779,52 @@ export async function GET(req: Request, ctx: RouteCtx) {
       .sort((a, b) => {
         if ((b.url_count as number) !== (a.url_count as number)) return (b.url_count as number) - (a.url_count as number);
         return String(a.extension).localeCompare(String(b.extension));
+      });
+  } else if (report === "http_status_distribution") {
+    fallbackHeaders = ["status_bucket", "status_code", "url_count", "share_percent", "sample_urls"];
+    const statusByUrl = new Map<string, number>();
+    for (const a of audits) {
+      if (a.httpStatus != null) statusByUrl.set(a.url, a.httpStatus);
+    }
+    for (const f of fetchRows) {
+      if (f.httpStatus != null) statusByUrl.set(f.requestedUrl, f.httpStatus);
+    }
+    const bucketByCode = (code: number | null): string => {
+      if (code == null) return "unknown";
+      if (code >= 200 && code < 300) return "2xx";
+      if (code >= 300 && code < 400) return "3xx";
+      if (code >= 400 && code < 500) return "4xx";
+      if (code >= 500 && code < 600) return "5xx";
+      return "other";
+    };
+    const groups = new Map<string, { bucket: string; code: number | null; count: number; samples: string[] }>();
+    const urlsForStatus = queueRows.length > 0 ? queueRows.map((q) => q.url) : fetchRows.map((f) => f.requestedUrl);
+    for (const url of urlsForStatus) {
+      const code = statusByUrl.get(url) ?? null;
+      const bucket = bucketByCode(code);
+      const key = `${bucket}:${code ?? "null"}`;
+      const hit = groups.get(key) ?? { bucket, code, count: 0, samples: [] };
+      hit.count += 1;
+      if (hit.samples.length < 5) hit.samples.push(url);
+      groups.set(key, hit);
+    }
+    const total = Math.max(1, urlsForStatus.length);
+    rows = [...groups.values()]
+      .map((g) => ({
+        status_bucket: g.bucket,
+        status_code: g.code,
+        url_count: g.count,
+        share_percent: Math.round((g.count / total) * 10000) / 100,
+        sample_urls: g.samples.join("|"),
+      }))
+      .sort((a, b) => {
+        const bucketOrder = ["2xx", "3xx", "4xx", "5xx", "other", "unknown"];
+        const bi = bucketOrder.indexOf(String(a.status_bucket));
+        const bj = bucketOrder.indexOf(String(b.status_bucket));
+        if (bi !== bj) return bi - bj;
+        const ac = (a.status_code as number | null) ?? 0;
+        const bc = (b.status_code as number | null) ?? 0;
+        return ac - bc;
       });
   } else if (report === "url_issues") {
     rows = queueRows.map((q) => {

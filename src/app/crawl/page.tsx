@@ -45,6 +45,12 @@ type CrawlSummaryResponse = {
     urls: number;
     broken: number;
     redirects: number;
+    status2xx: number;
+    status3xx: number;
+    status4xx: number;
+    status5xx: number;
+    statusOther: number;
+    statusUnknown: number;
     missingTitles: number;
     missingMetaDescriptions: number;
     missingH1: number;
@@ -146,6 +152,7 @@ type ExportReportKey =
   | "crawl_pathing"
   | "top_directories"
   | "url_extensions"
+  | "http_status_distribution"
   | "url_issues"
   | "parameter_variants"
   | "indexability_audit"
@@ -188,6 +195,7 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "crawl_pathing", label: "Crawl Pathing CSV" },
   { id: "top_directories", label: "Top Directories CSV" },
   { id: "url_extensions", label: "URL Extensions CSV" },
+  { id: "http_status_distribution", label: "HTTP Status Distribution CSV" },
   { id: "url_issues", label: "URL Issues CSV" },
   { id: "parameter_variants", label: "Parameter Variants CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
@@ -477,6 +485,12 @@ export default function CrawlPage() {
               <div>URLs: {reportSummary.urls}</div>
               <div>Broken: {reportSummary.broken}</div>
               <div>Redirects: {reportSummary.redirects}</div>
+              <div>Status 2xx: {reportSummary.status2xx}</div>
+              <div>Status 3xx: {reportSummary.status3xx}</div>
+              <div>Status 4xx: {reportSummary.status4xx}</div>
+              <div>Status 5xx: {reportSummary.status5xx}</div>
+              <div>Status other: {reportSummary.statusOther}</div>
+              <div>Status unknown: {reportSummary.statusUnknown}</div>
               <div>Missing title: {reportSummary.missingTitles}</div>
               <div>Missing meta desc: {reportSummary.missingMetaDescriptions}</div>
               <div>Missing H1: {reportSummary.missingH1}</div>
