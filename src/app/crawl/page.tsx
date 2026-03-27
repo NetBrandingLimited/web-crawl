@@ -292,7 +292,7 @@ export default function CrawlPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className="w-full px-4 py-8 sm:px-6 lg:px-10 xl:px-12">
         <div className="flex items-start justify-between gap-6">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Crawler & URL Discovery</h1>
