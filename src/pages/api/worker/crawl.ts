@@ -103,6 +103,18 @@ function capLen(s: string | null, max: number): string | null {
   return s.length > max ? s.slice(0, max) : s;
 }
 
+function extractSecurityResponseHeaders(headers: Headers) {
+  const perm = headers.get("permissions-policy") ?? headers.get("feature-policy");
+  return {
+    hstsHeader: cleanHeaderValue(headers.get("strict-transport-security"), 512),
+    cspHeader: capLen(cleanText(headers.get("content-security-policy")), 8192),
+    xContentTypeOptionsHeader: cleanHeaderValue(headers.get("x-content-type-options"), 64),
+    xFrameOptionsHeader: cleanHeaderValue(headers.get("x-frame-options"), 64),
+    referrerPolicyHeader: cleanHeaderValue(headers.get("referrer-policy"), 128),
+    permissionsPolicyHeader: capLen(cleanText(perm), 1024),
+  };
+}
+
 /** Normalize HTTP header (e.g. X-Robots-Tag) for storage; cap length for VARCHAR. */
 function cleanHeaderValue(v: string | null, maxLen: number): string | null {
   const t = cleanText(v);
@@ -331,6 +343,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const status = result.status;
       const contentType = result.headers.get("content-type") ?? "";
       const xRobotsTag = cleanHeaderValue(result.headers.get("x-robots-tag"), 512);
+      const securityHeaders = extractSecurityResponseHeaders(result.headers);
       const contentLengthHeader = result.headers.get("content-length");
       const contentLength = contentLengthHeader
         ? BigInt(contentLengthHeader)
@@ -406,6 +419,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             httpStatus: status,
             contentType,
             responseTimeMs,
+            ...securityHeaders,
           },
           update: {
             url: finalNormalized,
@@ -414,6 +428,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             contentType,
             fetchError: null,
             responseTimeMs,
+            ...securityHeaders,
             fetchedAt: new Date(),
           },
         }),

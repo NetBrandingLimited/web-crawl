@@ -115,6 +115,56 @@ function isHtml2xxAudit(a: { contentType: string | null; httpStatus: number | nu
   return ct.includes("text/html") && st != null && st >= 200 && st < 300;
 }
 
+function isHttps2xxAudit(a: { url: string; httpStatus: number | null }) {
+  try {
+    const u = new URL(a.url);
+    const st = a.httpStatus;
+    return u.protocol === "https:" && st != null && st >= 200 && st < 300;
+  } catch {
+    return false;
+  }
+}
+
+function collectSecurityAuditIssues(a: {
+  url: string;
+  canonicalUrl: string | null;
+  httpStatus: number | null;
+  hstsHeader: string | null;
+  cspHeader: string | null;
+  xContentTypeOptionsHeader: string | null;
+  xFrameOptionsHeader: string | null;
+}): string[] {
+  const issues: string[] = [];
+  try {
+    const u = new URL(a.url);
+    if (u.protocol !== "https:") issues.push("insecure_http_url");
+    for (const key of u.searchParams.keys()) {
+      const k = key.toLowerCase();
+      if (k.includes("token") || k.includes("password") || k.includes("secret") || k.includes("key")) {
+        issues.push("sensitive_query_param");
+        break;
+      }
+    }
+  } catch {
+    issues.push("invalid_url");
+  }
+  if (a.canonicalUrl) {
+    try {
+      const c = new URL(a.canonicalUrl, a.url);
+      if (c.protocol !== "https:") issues.push("insecure_canonical");
+    } catch {
+      issues.push("invalid_canonical");
+    }
+  }
+  if (isHttps2xxAudit(a)) {
+    if (!a.hstsHeader) issues.push("missing_strict_transport_security");
+    if (!a.xContentTypeOptionsHeader) issues.push("missing_x_content_type_options");
+    if (!a.xFrameOptionsHeader) issues.push("missing_x_frame_options");
+    if (!a.cspHeader) issues.push("missing_content_security_policy");
+  }
+  return issues;
+}
+
 export async function GET(req: Request, ctx: RouteCtx) {
   const { id: jobId } = await ctx.params;
   const { searchParams } = new URL(req.url);
@@ -268,31 +318,14 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const pagesMissingOgTitle = html2xxAudits.filter((a) => !a.ogTitle).length;
     const pagesWithOgImage = html2xxAudits.filter((a) => !!a.ogImage).length;
     const pagesMissingTwitterCard = html2xxAudits.filter((a) => !a.twitterCard).length;
-    const securityIssues = audits.filter((a) => {
-      const issues: string[] = [];
-      try {
-        const u = new URL(a.url);
-        if (u.protocol !== "https:") issues.push("insecure_http_url");
-        for (const key of u.searchParams.keys()) {
-          const k = key.toLowerCase();
-          if (k.includes("token") || k.includes("password") || k.includes("secret") || k.includes("key")) {
-            issues.push("sensitive_query_param");
-            break;
-          }
-        }
-      } catch {
-        issues.push("invalid_url");
-      }
-      if (a.canonicalUrl) {
-        try {
-          const c = new URL(a.canonicalUrl, a.url);
-          if (c.protocol !== "https:") issues.push("insecure_canonical");
-        } catch {
-          issues.push("invalid_canonical");
-        }
-      }
-      return issues.length > 0;
-    }).length;
+    const https2xxAudits = audits.filter(isHttps2xxAudit);
+    const httpsMissingHsts = https2xxAudits.filter((a) => !a.hstsHeader).length;
+    const httpsMissingXContentTypeOptions = https2xxAudits.filter(
+      (a) => !a.xContentTypeOptionsHeader,
+    ).length;
+    const httpsMissingXFrameOptions = https2xxAudits.filter((a) => !a.xFrameOptionsHeader).length;
+    const httpsMissingCsp = https2xxAudits.filter((a) => !a.cspHeader).length;
+    const securityIssues = audits.filter((a) => collectSecurityAuditIssues(a).length > 0).length;
     const contentQualityIssues = audits.filter((a) => {
       const issues: string[] = [];
       if ((a.wordCount ?? 0) < 150) issues.push("thin_content");
@@ -345,6 +378,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagesMissingOgTitle,
         pagesWithOgImage,
         pagesMissingTwitterCard,
+        httpsMissingHsts,
+        httpsMissingXContentTypeOptions,
+        httpsMissingXFrameOptions,
+        httpsMissingCsp,
       },
     });
   }
@@ -377,6 +414,12 @@ export async function GET(req: Request, ctx: RouteCtx) {
       links_out_count: a.linksOutCount,
       links_external_count: a.linksExternalCount,
       response_time_ms: a.responseTimeMs,
+      hsts: a.hstsHeader,
+      csp: a.cspHeader,
+      x_content_type_options: a.xContentTypeOptionsHeader,
+      x_frame_options: a.xFrameOptionsHeader,
+      referrer_policy: a.referrerPolicyHeader,
+      permissions_policy: a.permissionsPolicyHeader,
       img_count: a.imgCount,
       img_missing_alt_count: a.imgMissingAltCount,
       word_count: a.wordCount,
@@ -742,31 +785,21 @@ export async function GET(req: Request, ctx: RouteCtx) {
     });
   } else if (report === "security_audit") {
     rows = audits.map((a) => {
-      const issues: string[] = [];
+      const issues = collectSecurityAuditIssues(a);
       let scheme: string | null = null;
       let hasSensitiveQueryParams = false;
       try {
         const u = new URL(a.url);
         scheme = u.protocol.replace(":", "");
-        if (u.protocol !== "https:") issues.push("insecure_http_url");
         for (const key of u.searchParams.keys()) {
           const k = key.toLowerCase();
           if (k.includes("token") || k.includes("password") || k.includes("secret") || k.includes("key")) {
             hasSensitiveQueryParams = true;
-            issues.push("sensitive_query_param");
             break;
           }
         }
       } catch {
-        issues.push("invalid_url");
-      }
-      if (a.canonicalUrl) {
-        try {
-          const c = new URL(a.canonicalUrl, a.url);
-          if (c.protocol !== "https:") issues.push("insecure_canonical");
-        } catch {
-          issues.push("invalid_canonical");
-        }
+        /* scheme stays null */
       }
       return {
         url: a.url,
@@ -774,6 +807,12 @@ export async function GET(req: Request, ctx: RouteCtx) {
         http_status: a.httpStatus,
         scheme,
         canonical_url: a.canonicalUrl,
+        has_hsts: !!a.hstsHeader,
+        has_csp: !!a.cspHeader,
+        has_x_content_type_options: !!a.xContentTypeOptionsHeader,
+        has_x_frame_options: !!a.xFrameOptionsHeader,
+        has_referrer_policy: !!a.referrerPolicyHeader,
+        has_permissions_policy: !!a.permissionsPolicyHeader,
         has_sensitive_query_params: hasSensitiveQueryParams,
         issue_count: issues.length,
         issues: issues.join("|"),
@@ -883,6 +922,18 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = chainRows;
+  } else if (report === "security_headers") {
+    rows = audits.map((a) => ({
+      url: a.url,
+      depth: a.depth,
+      http_status: a.httpStatus,
+      strict_transport_security: a.hstsHeader,
+      content_security_policy: a.cspHeader,
+      x_content_type_options: a.xContentTypeOptionsHeader,
+      x_frame_options: a.xFrameOptionsHeader,
+      referrer_policy: a.referrerPolicyHeader,
+      permissions_policy: a.permissionsPolicyHeader,
+    }));
   } else if (report === "social_meta") {
     rows = audits.map((a) => ({
       url: a.url,

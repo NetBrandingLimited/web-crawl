@@ -98,6 +98,12 @@ model CrawlPageAudit {
   jsonLdTypesSummary String?  @db.VarChar(1024)
   wordCount     Int      @default(0)
   responseTimeMs Int?
+  hstsHeader                 String? @db.VarChar(512)
+  cspHeader                  String? @db.Text
+  xContentTypeOptionsHeader  String? @db.VarChar(64)
+  xFrameOptionsHeader        String? @db.VarChar(64)
+  referrerPolicyHeader       String? @db.VarChar(128)
+  permissionsPolicyHeader    String? @db.VarChar(1024)
   contentHash   String?  @db.Char(40)
   fetchedAt     DateTime @default(now())
   fetchError    String?  @db.VarChar(512)
