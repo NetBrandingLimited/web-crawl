@@ -2064,6 +2064,134 @@ export async function GET(req: Request, ctx: RouteCtx) {
         }
         return String(a.parameter_name).localeCompare(String(b.parameter_name));
       });
+  } else if (report === "longest_urls") {
+    fallbackHeaders = [
+      "url",
+      "crawl_depth",
+      "url_length",
+      "has_query_params",
+      "query_param_count",
+      "issue_flags",
+    ];
+    rows = queueRows
+      .map((q) => {
+        let hasQueryParams = false;
+        let queryParamCount = 0;
+        const issueFlags: string[] = [];
+        try {
+          const u = new URL(q.url);
+          hasQueryParams = u.search.length > 0;
+          queryParamCount = u.searchParams.size;
+          if (q.url.length > 120) issueFlags.push("long_url");
+          if (hasQueryParams) issueFlags.push("has_parameters");
+          if (/[A-Z]/.test(q.url)) issueFlags.push("uppercase_characters");
+          if (/[^\x00-\x7F]/.test(q.url)) issueFlags.push("non_ascii_characters");
+        } catch {
+          issueFlags.push("invalid_url");
+        }
+        return {
+          url: q.url,
+          crawl_depth: q.depth,
+          url_length: q.url.length,
+          has_query_params: hasQueryParams,
+          query_param_count: queryParamCount,
+          issue_flags: issueFlags.join("|"),
+        };
+      })
+      .sort((a, b) => (b.url_length as number) - (a.url_length as number))
+      .slice(0, 500);
+  } else if (report === "long_titles") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "title",
+      "title_length",
+      "recommended_max",
+    ];
+    rows = audits
+      .filter((a) => (a.titleLength ?? 0) > 60)
+      .map((a) => ({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        title_length: a.titleLength,
+        recommended_max: 60,
+      }));
+  } else if (report === "short_titles") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "title",
+      "title_length",
+      "recommended_min",
+    ];
+    rows = audits
+      .filter((a) => (a.titleLength ?? 0) > 0 && (a.titleLength ?? 0) < 30)
+      .map((a) => ({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        title_length: a.titleLength,
+        recommended_min: 30,
+      }));
+  } else if (report === "low_word_count") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "content_type",
+      "word_count",
+      "threshold",
+      "title",
+    ];
+    rows = audits
+      .filter((a) => (a.wordCount ?? 0) > 0 && (a.wordCount ?? 0) < 150)
+      .map((a) => ({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        word_count: a.wordCount,
+        threshold: 150,
+        title: a.title,
+      }));
+  } else if (report === "orphan_candidates_strict") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "inlinks_count",
+      "queue_state",
+      "canonical_url",
+      "title",
+      "reason",
+    ];
+    const inlinksByHash = new Map<string, number>();
+    for (const q of queueRows) {
+      if (!q.discoveredFromUrlHash) continue;
+      inlinksByHash.set(q.urlHash, (inlinksByHash.get(q.urlHash) ?? 0) + 1);
+    }
+    const auditsByHash = new Map(audits.map((a) => [a.urlHash, a]));
+    rows = queueRows
+      .filter((q) => q.depth > 0 && (inlinksByHash.get(q.urlHash) ?? 0) === 0)
+      .map((q) => {
+        const a = auditsByHash.get(q.urlHash);
+        const okStatus = a?.httpStatus == null || (a.httpStatus >= 200 && a.httpStatus < 300);
+        return {
+          url: q.url,
+          depth: q.depth,
+          http_status: a?.httpStatus ?? null,
+          inlinks_count: 0,
+          queue_state: q.state,
+          canonical_url: a?.canonicalUrl ?? null,
+          title: a?.title ?? null,
+          reason: okStatus ? "zero_internal_inlinks_non_seed" : "zero_internal_inlinks_non_seed_non2xx",
+        };
+      });
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);

@@ -163,6 +163,11 @@ type ExportReportKey =
   | "url_issues"
   | "parameter_variants"
   | "parameter_inventory"
+  | "longest_urls"
+  | "long_titles"
+  | "short_titles"
+  | "low_word_count"
+  | "orphan_candidates_strict"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -210,6 +215,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "url_issues", label: "URL Issues CSV" },
   { id: "parameter_variants", label: "Parameter Variants CSV" },
   { id: "parameter_inventory", label: "Parameter Inventory CSV" },
+  { id: "longest_urls", label: "Longest URLs CSV" },
+  { id: "long_titles", label: "Long Titles CSV" },
+  { id: "short_titles", label: "Short Titles CSV" },
+  { id: "low_word_count", label: "Low Word Count CSV" },
+  { id: "orphan_candidates_strict", label: "Orphan Candidates (Strict) CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },
