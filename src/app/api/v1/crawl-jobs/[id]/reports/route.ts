@@ -1780,6 +1780,13 @@ export async function GET(req: Request, ctx: RouteCtx) {
       permissions_policy: a.permissionsPolicyHeader,
     }));
   } else if (report === "pagination") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "pagination_next_url",
+      "pagination_prev_url",
+    ];
     rows = audits
       .filter((a) => a.paginationNextUrl || a.paginationPrevUrl)
       .map((a) => ({
