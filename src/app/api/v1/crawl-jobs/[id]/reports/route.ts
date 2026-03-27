@@ -1717,6 +1717,55 @@ export async function GET(req: Request, ctx: RouteCtx) {
         }
         return String(a.directory_path).localeCompare(String(b.directory_path));
       });
+  } else if (report === "url_extensions") {
+    fallbackHeaders = ["extension", "url_count", "share_percent", "sample_urls", "content_type_samples"];
+    const contentTypeByUrl = new Map<string, string>();
+    for (const a of audits) {
+      if (a.contentType) contentTypeByUrl.set(a.url, a.contentType);
+    }
+    for (const f of fetchRows) {
+      if (f.contentType) contentTypeByUrl.set(f.requestedUrl, f.contentType);
+    }
+    const groups = new Map<
+      string,
+      { count: number; samples: string[]; ctSamples: string[] }
+    >();
+    const extOf = (rawUrl: string) => {
+      try {
+        const u = new URL(rawUrl);
+        const path = u.pathname;
+        const last = path.split("/").pop() ?? "";
+        const dot = last.lastIndexOf(".");
+        if (dot <= 0 || dot === last.length - 1) return "(none)";
+        const ext = last.slice(dot + 1).toLowerCase();
+        if (ext.length > 10) return "(other)";
+        return ext;
+      } catch {
+        return "(invalid)";
+      }
+    };
+    for (const q of queueRows) {
+      const ext = extOf(q.url);
+      const hit = groups.get(ext) ?? { count: 0, samples: [], ctSamples: [] };
+      hit.count += 1;
+      if (hit.samples.length < 5) hit.samples.push(q.url);
+      const ct = contentTypeByUrl.get(q.url);
+      if (ct && hit.ctSamples.length < 5 && !hit.ctSamples.includes(ct)) hit.ctSamples.push(ct);
+      groups.set(ext, hit);
+    }
+    const total = queueRows.length;
+    rows = [...groups.entries()]
+      .map(([extension, g]) => ({
+        extension,
+        url_count: g.count,
+        share_percent: total > 0 ? Math.round((g.count / total) * 10000) / 100 : 0,
+        sample_urls: g.samples.join("|"),
+        content_type_samples: g.ctSamples.join("|"),
+      }))
+      .sort((a, b) => {
+        if ((b.url_count as number) !== (a.url_count as number)) return (b.url_count as number) - (a.url_count as number);
+        return String(a.extension).localeCompare(String(b.extension));
+      });
   } else if (report === "url_issues") {
     rows = queueRows.map((q) => {
       const issues: string[] = [];
