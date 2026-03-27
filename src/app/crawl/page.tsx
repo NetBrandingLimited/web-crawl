@@ -138,6 +138,7 @@ type ExportReportKey =
   | "heading_audit"
   | "site_structure"
   | "internal_link_graph"
+  | "top_inlinked_pages"
   | "url_issues"
   | "parameter_variants"
   | "indexability_audit"
@@ -175,6 +176,7 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "heading_audit", label: "H1/H2 Audit CSV" },
   { id: "site_structure", label: "Site Structure CSV" },
   { id: "internal_link_graph", label: "Internal Link Graph CSV" },
+  { id: "top_inlinked_pages", label: "Top Inlinked Pages CSV" },
   { id: "url_issues", label: "URL Issues CSV" },
   { id: "parameter_variants", label: "Parameter Variants CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },

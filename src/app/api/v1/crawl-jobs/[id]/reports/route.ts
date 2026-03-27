@@ -1567,6 +1567,49 @@ export async function GET(req: Request, ctx: RouteCtx) {
         is_orphan_like: q.depth > 0 && inlinks === 0,
       };
     });
+  } else if (report === "top_inlinked_pages") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "inlinks_count",
+      "outlinks_internal_count",
+      "inlink_source_sample",
+      "is_orphan_like",
+      "inlink_rank",
+    ];
+    const queueByHash = new Map(queueRows.map((q) => [q.urlHash, q]));
+    const sourceUrlsByTarget = new Map<string, string[]>();
+    const inlinksByHash = new Map<string, number>();
+    const outlinksBySource = new Map<string, number>();
+    for (const q of queueRows) {
+      if (!q.discoveredFromUrlHash) continue;
+      inlinksByHash.set(q.urlHash, (inlinksByHash.get(q.urlHash) ?? 0) + 1);
+      outlinksBySource.set(q.discoveredFromUrlHash, (outlinksBySource.get(q.discoveredFromUrlHash) ?? 0) + 1);
+      const srcUrl = queueByHash.get(q.discoveredFromUrlHash)?.url;
+      if (!srcUrl) continue;
+      const arr = sourceUrlsByTarget.get(q.urlHash) ?? [];
+      if (arr.length < 5 && !arr.includes(srcUrl)) arr.push(srcUrl);
+      sourceUrlsByTarget.set(q.urlHash, arr);
+    }
+    const ranked = queueRows
+      .map((q) => {
+        const inlinks = inlinksByHash.get(q.urlHash) ?? 0;
+        const outlinks = outlinksBySource.get(q.urlHash) ?? 0;
+        const sample = sourceUrlsByTarget.get(q.urlHash) ?? [];
+        return {
+          url: q.url,
+          depth: q.depth,
+          inlinks_count: inlinks,
+          outlinks_internal_count: outlinks,
+          inlink_source_sample: sample.join("|"),
+          is_orphan_like: q.depth > 0 && inlinks === 0,
+        };
+      })
+      .sort((a, b) => {
+        if (b.inlinks_count !== a.inlinks_count) return b.inlinks_count - a.inlinks_count;
+        return a.url.localeCompare(b.url);
+      });
+    rows = ranked.map((r, idx) => ({ ...r, inlink_rank: idx + 1 }));
   } else if (report === "url_issues") {
     rows = queueRows.map((q) => {
       const issues: string[] = [];
