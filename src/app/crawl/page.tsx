@@ -84,6 +84,10 @@ type CrawlSummaryResponse = {
     totalMailtoLinks: number;
     totalTelLinks: number;
     totalHashOnlyLinks: number;
+    pagesWithMetaRefresh: number;
+    pagesWithTitleH1Mismatch: number;
+    pagesMissingFavicon: number;
+    https2xxMissingCacheControl: number;
     httpsMissingHsts: number;
     httpsMissingXContentTypeOptions: number;
     httpsMissingXFrameOptions: number;
@@ -231,6 +235,7 @@ export default function CrawlPage() {
       | "robots_blocked"
       | "hreflang_audit"
       | "security_audit"
+      | "caching"
       | "security_headers"
       | "content_quality"
       | "performance"
@@ -477,6 +482,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("caching", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Caching CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("security_headers", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -601,6 +614,10 @@ export default function CrawlPage() {
               <div>Total mailto links: {reportSummary.totalMailtoLinks}</div>
               <div>Total tel links: {reportSummary.totalTelLinks}</div>
               <div>Total hash-only links: {reportSummary.totalHashOnlyLinks}</div>
+              <div>HTML 2xx w/ meta refresh: {reportSummary.pagesWithMetaRefresh}</div>
+              <div>HTML 2xx title≠H1: {reportSummary.pagesWithTitleH1Mismatch}</div>
+              <div>HTML 2xx missing favicon: {reportSummary.pagesMissingFavicon}</div>
+              <div>HTTPS 2xx missing Cache-Control: {reportSummary.https2xxMissingCacheControl}</div>
               <div>HTTPS 2xx missing HSTS: {reportSummary.httpsMissingHsts}</div>
               <div>HTTPS 2xx missing X-Content-Type-Options: {reportSummary.httpsMissingXContentTypeOptions}</div>
               <div>HTTPS 2xx missing X-Frame-Options: {reportSummary.httpsMissingXFrameOptions}</div>

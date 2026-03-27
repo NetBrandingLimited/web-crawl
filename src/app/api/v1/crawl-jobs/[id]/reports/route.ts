@@ -13,6 +13,7 @@ function classifyIssues(row: {
   title: string | null;
   metaDesc: string | null;
   h1Count: number;
+  h1Text: string | null;
   canonicalUrl: string | null;
   fetchError: string | null;
   imgMissingAltCount: number;
@@ -21,6 +22,7 @@ function classifyIssues(row: {
   responseTimeMs: number | null;
   htmlLang: string | null;
   viewportMeta: string | null;
+  metaRefreshContent: string | null;
 }) {
   const issues: string[] = [];
   if (row.fetchError) {
@@ -55,6 +57,12 @@ function classifyIssues(row: {
     row.httpStatus < 300;
   if (html2xx && !row.htmlLang) issues.push("missing_html_lang");
   if (html2xx && !row.viewportMeta) issues.push("missing_viewport_meta");
+  if (row.title && row.h1Text) {
+    const tk = normalizeDupKey(row.title);
+    const hk = normalizeDupKey(row.h1Text);
+    if (tk && hk && tk !== hk) issues.push("title_h1_mismatch");
+  }
+  if (html2xx && row.metaRefreshContent) issues.push("meta_refresh_present");
   return issues;
 }
 
@@ -346,6 +354,14 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const pagesMissingHtmlLang = html2xxAudits.filter((a) => !a.htmlLang).length;
     const pagesMissingViewport = html2xxAudits.filter((a) => !a.viewportMeta).length;
     const pagesWithNofollowLinks = audits.filter((a) => a.linksNofollowCount > 0).length;
+    const pagesWithMetaRefresh = html2xxAudits.filter((a) => !!a.metaRefreshContent).length;
+    const pagesWithTitleH1Mismatch = html2xxAudits.filter((a) => {
+      if (!a.title || !a.h1Text) return false;
+      const tk = normalizeDupKey(a.title);
+      const hk = normalizeDupKey(a.h1Text);
+      return !!tk && !!hk && tk !== hk;
+    }).length;
+    const pagesMissingFavicon = html2xxAudits.filter((a) => !a.faviconUrl).length;
     const pagesWithRelNext = audits.filter((a) => !!a.paginationNextUrl).length;
     const pagesWithRelPrev = audits.filter((a) => !!a.paginationPrevUrl).length;
     const pagesWithMailtoLinks = audits.filter((a) => a.linksMailtoCount > 0).length;
@@ -354,6 +370,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const totalTelLinks = audits.reduce((s, a) => s + a.linksTelCount, 0);
     const totalHashOnlyLinks = audits.reduce((s, a) => s + a.linksHashOnlyCount, 0);
     const https2xxAudits = audits.filter(isHttps2xxAudit);
+    const https2xxMissingCacheControl = https2xxAudits.filter((a) => !a.cacheControlHeader).length;
     const httpsMissingHsts = https2xxAudits.filter((a) => !a.hstsHeader).length;
     const httpsMissingXContentTypeOptions = https2xxAudits.filter(
       (a) => !a.xContentTypeOptionsHeader,
@@ -417,6 +434,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagesMissingHtmlLang,
         pagesMissingViewport,
         pagesWithNofollowLinks,
+        pagesWithMetaRefresh,
+        pagesWithTitleH1Mismatch,
+        pagesMissingFavicon,
+        https2xxMissingCacheControl,
         pagesWithRelNext,
         pagesWithRelPrev,
         pagesWithMailtoLinks,
@@ -476,6 +497,11 @@ export async function GET(req: Request, ctx: RouteCtx) {
       x_frame_options: a.xFrameOptionsHeader,
       referrer_policy: a.referrerPolicyHeader,
       permissions_policy: a.permissionsPolicyHeader,
+      cache_control: a.cacheControlHeader,
+      last_modified: a.lastModifiedHeader,
+      etag: a.etagHeader,
+      favicon_url: a.faviconUrl,
+      meta_refresh: a.metaRefreshContent,
       img_count: a.imgCount,
       img_missing_alt_count: a.imgMissingAltCount,
       word_count: a.wordCount,
@@ -1004,6 +1030,17 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = chainRows;
+  } else if (report === "caching") {
+    rows = audits.map((a) => ({
+      url: a.url,
+      depth: a.depth,
+      http_status: a.httpStatus,
+      content_type: a.contentType,
+      cache_control: a.cacheControlHeader,
+      last_modified: a.lastModifiedHeader,
+      etag: a.etagHeader,
+      response_time_ms: a.responseTimeMs,
+    }));
   } else if (report === "security_headers") {
     rows = audits.map((a) => ({
       url: a.url,

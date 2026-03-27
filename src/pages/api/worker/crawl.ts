@@ -115,6 +115,14 @@ function extractSecurityResponseHeaders(headers: Headers) {
   };
 }
 
+function extractCachingResponseHeaders(headers: Headers) {
+  return {
+    cacheControlHeader: cleanHeaderValue(headers.get("cache-control"), 512),
+    lastModifiedHeader: cleanHeaderValue(headers.get("last-modified"), 128),
+    etagHeader: cleanHeaderValue(headers.get("etag"), 256),
+  };
+}
+
 /** Normalize HTTP header (e.g. X-Robots-Tag) for storage; cap length for VARCHAR. */
 function cleanHeaderValue(v: string | null, maxLen: number): string | null {
   const t = cleanText(v);
@@ -344,6 +352,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const contentType = result.headers.get("content-type") ?? "";
       const xRobotsTag = cleanHeaderValue(result.headers.get("x-robots-tag"), 512);
       const securityHeaders = extractSecurityResponseHeaders(result.headers);
+      const cachingHeaders = extractCachingResponseHeaders(result.headers);
       const contentLengthHeader = result.headers.get("content-length");
       const contentLength = contentLengthHeader
         ? BigInt(contentLengthHeader)
@@ -420,6 +429,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             contentType,
             responseTimeMs,
             ...securityHeaders,
+            ...cachingHeaders,
           },
           update: {
             url: finalNormalized,
@@ -429,6 +439,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             fetchError: null,
             responseTimeMs,
             ...securityHeaders,
+            ...cachingHeaders,
             fetchedAt: new Date(),
           },
         }),
@@ -513,6 +524,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
           });
         }
+        let faviconUrl: string | null = null;
+        $("link[href][rel]").each((_, el) => {
+          if (faviconUrl) return;
+          const hrefRaw = $(el).attr("href");
+          const href = hrefRaw?.trim();
+          if (!href) return;
+          const tokens = ($(el).attr("rel") ?? "")
+            .toLowerCase()
+            .split(/\s+/)
+            .filter(Boolean);
+          if (
+            tokens.includes("icon") ||
+            (tokens.includes("shortcut") && tokens.includes("icon"))
+          ) {
+            faviconUrl = absolutizeMetaUrl(href, item.url, 2048);
+          }
+        });
+        let metaRefreshContent: string | null = null;
+        $("meta[http-equiv]").each((_, el) => {
+          if (metaRefreshContent) return;
+          if ($(el).attr("http-equiv")?.toLowerCase() !== "refresh") return;
+          metaRefreshContent = capLen(cleanText($(el).attr("content")), 512);
+        });
         const h1Count = $("h1").length;
         const h1Text = capLen(cleanText($("h1").first().text()), 512);
         const h2Count = $("h2").length;
@@ -615,6 +649,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               htmlLang,
               viewportMeta,
               charsetMeta,
+              faviconUrl,
+              metaRefreshContent,
               h1Count,
               h1Text,
               h2Count,
@@ -658,6 +694,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               htmlLang: null,
               viewportMeta: null,
               charsetMeta: null,
+              faviconUrl: null,
+              metaRefreshContent: null,
               h1Text: null,
               ogTitle: null,
               ogDescription: null,
