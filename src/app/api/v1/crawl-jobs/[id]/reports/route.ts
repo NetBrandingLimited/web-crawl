@@ -130,6 +130,10 @@ function robotsDirectiveTokens(meta: string | null, xRobots: string | null): str
         .filter(Boolean);
 }
 
+function normalizeUrlForCanonicalCompare(u: URL) {
+  return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
+}
+
 function isHtml2xxAudit(a: { contentType: string | null; httpStatus: number | null }) {
   const ct = (a.contentType ?? "").toLowerCase();
   const st = a.httpStatus;
@@ -283,19 +287,28 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     const nearDuplicates = nearDupUrlHashes.size;
-    const canonicalIssues = audits.filter((a) => {
-      if (!a.canonicalUrl) return true;
+    let canonicalIssues = 0;
+    let canonicalCrossDomain = 0;
+    let canonicalProtocolMismatch = 0;
+    let canonicalWithFragment = 0;
+    for (const a of audits) {
+      if (!a.canonicalUrl) {
+        canonicalIssues += 1;
+        continue;
+      }
       try {
         const page = new URL(a.url);
         const canonical = new URL(a.canonicalUrl, a.url);
-        // Same URL except trailing slash differences are acceptable.
-        const normalize = (u: URL) =>
-          `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
-        return normalize(page) !== normalize(canonical);
+        const isSelf =
+          normalizeUrlForCanonicalCompare(page) === normalizeUrlForCanonicalCompare(canonical);
+        if (!isSelf) canonicalIssues += 1;
+        if (page.host !== canonical.host) canonicalCrossDomain += 1;
+        if (page.protocol !== canonical.protocol) canonicalProtocolMismatch += 1;
+        if (canonical.hash) canonicalWithFragment += 1;
       } catch {
-        return true;
+        canonicalIssues += 1;
       }
-    }).length;
+    }
     const headingIssues = audits.filter(
       (a) => a.h1Count === 0 || a.h1Count > 1 || a.h2Count === 0,
     ).length;
@@ -369,6 +382,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
     const pagesMissingFavicon = html2xxAudits.filter((a) => !a.faviconUrl).length;
     const pagesWithRelNext = audits.filter((a) => !!a.paginationNextUrl).length;
     const pagesWithRelPrev = audits.filter((a) => !!a.paginationPrevUrl).length;
+    const pagesWithAmphtml = audits.filter((a) => !!a.amphtmlUrl).length;
+    const pagesWithRssFeed = audits.filter((a) => !!a.rssFeedUrl).length;
+    const pagesWithAtomFeed = audits.filter((a) => !!a.atomFeedUrl).length;
+    const pagesWithJsonFeed = audits.filter((a) => !!a.jsonFeedUrl).length;
     const pagesWithMailtoLinks = audits.filter((a) => a.linksMailtoCount > 0).length;
     const pagesWithTelLinks = audits.filter((a) => a.linksTelCount > 0).length;
     const totalMailtoLinks = audits.reduce((s, a) => s + a.linksMailtoCount, 0);
@@ -446,8 +463,15 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagesWithContentLanguage,
         pagesMissingFavicon,
         https2xxMissingCacheControl,
+        canonicalCrossDomain,
+        canonicalProtocolMismatch,
+        canonicalWithFragment,
         pagesWithRelNext,
         pagesWithRelPrev,
+        pagesWithAmphtml,
+        pagesWithRssFeed,
+        pagesWithAtomFeed,
+        pagesWithJsonFeed,
         pagesWithMailtoLinks,
         pagesWithTelLinks,
         totalMailtoLinks,
@@ -498,6 +522,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
       links_hash_only_count: a.linksHashOnlyCount,
       pagination_next_url: a.paginationNextUrl,
       pagination_prev_url: a.paginationPrevUrl,
+      amphtml_url: a.amphtmlUrl,
+      rss_feed_url: a.rssFeedUrl,
+      atom_feed_url: a.atomFeedUrl,
+      json_feed_url: a.jsonFeedUrl,
       response_time_ms: a.responseTimeMs,
       hsts: a.hstsHeader,
       csp: a.cspHeader,
@@ -756,15 +784,19 @@ export async function GET(req: Request, ctx: RouteCtx) {
       let canonicalStatus: "missing" | "self" | "non_self" | "invalid" = "missing";
       let canonicalResolved: string | null = null;
       let issue: string | null = "missing_canonical";
+      let canonical_host_match: boolean | null = null;
+      let canonical_protocol_match: boolean | null = null;
+      let canonical_has_fragment: boolean | null = null;
 
       if (a.canonicalUrl) {
         try {
           const page = new URL(a.url);
           const canonical = new URL(a.canonicalUrl, a.url);
           canonicalResolved = canonical.toString();
-          const normalize = (u: URL) =>
-            `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
-          if (normalize(page) === normalize(canonical)) {
+          canonical_host_match = page.host === canonical.host;
+          canonical_protocol_match = page.protocol === canonical.protocol;
+          canonical_has_fragment = !!canonical.hash;
+          if (normalizeUrlForCanonicalCompare(page) === normalizeUrlForCanonicalCompare(canonical)) {
             canonicalStatus = "self";
             issue = null;
           } else {
@@ -784,6 +816,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         canonical_raw: a.canonicalUrl,
         canonical_resolved: canonicalResolved,
         canonical_status: canonicalStatus,
+        canonical_host_match,
+        canonical_protocol_match,
+        canonical_has_fragment,
         issue,
       };
     });
@@ -1088,6 +1123,18 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagination_next_url: a.paginationNextUrl,
         pagination_prev_url: a.paginationPrevUrl,
       }));
+  } else if (report === "feeds_amp") {
+    rows = audits.map((a) => ({
+      url: a.url,
+      depth: a.depth,
+      http_status: a.httpStatus,
+      content_type: a.contentType,
+      amphtml_url: a.amphtmlUrl,
+      rss_feed_url: a.rssFeedUrl,
+      atom_feed_url: a.atomFeedUrl,
+      json_feed_url: a.jsonFeedUrl,
+      has_any_feed_or_amp: !!(a.amphtmlUrl || a.rssFeedUrl || a.atomFeedUrl || a.jsonFeedUrl),
+    }));
   } else if (report === "social_meta") {
     rows = audits.map((a) => ({
       url: a.url,
@@ -1118,6 +1165,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
       links_hash_only_count: a.linksHashOnlyCount,
       pagination_next_url: a.paginationNextUrl,
       pagination_prev_url: a.paginationPrevUrl,
+      amphtml_url: a.amphtmlUrl,
+      rss_feed_url: a.rssFeedUrl,
+      atom_feed_url: a.atomFeedUrl,
+      json_feed_url: a.jsonFeedUrl,
       word_count: a.wordCount,
     }));
   } else if (report === "link_breakdown") {
@@ -1134,6 +1185,10 @@ export async function GET(req: Request, ctx: RouteCtx) {
       links_hash_only_count: a.linksHashOnlyCount,
       pagination_next_url: a.paginationNextUrl,
       pagination_prev_url: a.paginationPrevUrl,
+      amphtml_url: a.amphtmlUrl,
+      rss_feed_url: a.rssFeedUrl,
+      atom_feed_url: a.atomFeedUrl,
+      json_feed_url: a.jsonFeedUrl,
     }));
   } else if (report === "robots_blocked") {
     rows = audits

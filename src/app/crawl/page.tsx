@@ -91,6 +91,13 @@ type CrawlSummaryResponse = {
     pagesWithContentLanguage: number;
     pagesMissingFavicon: number;
     https2xxMissingCacheControl: number;
+    canonicalCrossDomain: number;
+    canonicalProtocolMismatch: number;
+    canonicalWithFragment: number;
+    pagesWithAmphtml: number;
+    pagesWithRssFeed: number;
+    pagesWithAtomFeed: number;
+    pagesWithJsonFeed: number;
     httpsMissingHsts: number;
     httpsMissingXContentTypeOptions: number;
     httpsMissingXFrameOptions: number;
@@ -245,6 +252,7 @@ export default function CrawlPage() {
       | "performance"
       | "link_breakdown"
       | "pagination"
+      | "feeds_amp"
       | "social_meta"
       | "structured_data"
       | "images"
@@ -542,6 +550,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("feeds_amp", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Feeds / AMP CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("social_meta", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -633,6 +649,13 @@ export default function CrawlPage() {
               <div>Pages with content-language: {reportSummary.pagesWithContentLanguage}</div>
               <div>HTML 2xx missing favicon: {reportSummary.pagesMissingFavicon}</div>
               <div>HTTPS 2xx missing Cache-Control: {reportSummary.https2xxMissingCacheControl}</div>
+              <div>Canonical cross-domain: {reportSummary.canonicalCrossDomain}</div>
+              <div>Canonical protocol mismatch: {reportSummary.canonicalProtocolMismatch}</div>
+              <div>Canonical with fragment: {reportSummary.canonicalWithFragment}</div>
+              <div>Pages with amphtml: {reportSummary.pagesWithAmphtml}</div>
+              <div>Pages with RSS feed: {reportSummary.pagesWithRssFeed}</div>
+              <div>Pages with Atom feed: {reportSummary.pagesWithAtomFeed}</div>
+              <div>Pages with JSON feed: {reportSummary.pagesWithJsonFeed}</div>
               <div>HTTPS 2xx missing HSTS: {reportSummary.httpsMissingHsts}</div>
               <div>HTTPS 2xx missing X-Content-Type-Options: {reportSummary.httpsMissingXContentTypeOptions}</div>
               <div>HTTPS 2xx missing X-Frame-Options: {reportSummary.httpsMissingXFrameOptions}</div>

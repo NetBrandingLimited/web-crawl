@@ -557,6 +557,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const linksOutCount = $("a[href]").length;
         let paginationNextUrl: string | null = null;
         let paginationPrevUrl: string | null = null;
+        let amphtmlUrl: string | null = null;
+        let rssFeedUrl: string | null = null;
+        let atomFeedUrl: string | null = null;
+        let jsonFeedUrl: string | null = null;
         $("link[href][rel]").each((_, el) => {
           const r = $(el).attr("rel");
           const hrefRaw = $(el).attr("href");
@@ -571,6 +575,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
           if (!paginationPrevUrl && (tokens.includes("prev") || tokens.includes("previous"))) {
             paginationPrevUrl = absolutizeMetaUrl(href, item.url, 2048);
+          }
+          const type = ($(el).attr("type") ?? "").toLowerCase();
+          if (!amphtmlUrl && tokens.includes("amphtml")) {
+            amphtmlUrl = absolutizeMetaUrl(href, item.url, 2048);
+          }
+          if (!rssFeedUrl && tokens.includes("alternate") && type.includes("application/rss+xml")) {
+            rssFeedUrl = absolutizeMetaUrl(href, item.url, 2048);
+          }
+          if (!atomFeedUrl && tokens.includes("alternate") && type.includes("application/atom+xml")) {
+            atomFeedUrl = absolutizeMetaUrl(href, item.url, 2048);
+          }
+          if (!jsonFeedUrl && tokens.includes("alternate") && type.includes("application/feed+json")) {
+            jsonFeedUrl = absolutizeMetaUrl(href, item.url, 2048);
           }
         });
         const seedHost = new URL(item.job.seedUrl).hostname.toLowerCase();
@@ -669,6 +686,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               linksHashOnlyCount,
               paginationNextUrl,
               paginationPrevUrl,
+              amphtmlUrl,
+              rssFeedUrl,
+              atomFeedUrl,
+              jsonFeedUrl,
               imgCount,
               imgMissingAltCount,
               jsonLdCount,
@@ -694,6 +715,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               linksHashOnlyCount: 0,
               paginationNextUrl: null,
               paginationPrevUrl: null,
+              amphtmlUrl: null,
+              rssFeedUrl: null,
+              atomFeedUrl: null,
+              jsonFeedUrl: null,
               htmlLang: null,
               viewportMeta: null,
               charsetMeta: null,
