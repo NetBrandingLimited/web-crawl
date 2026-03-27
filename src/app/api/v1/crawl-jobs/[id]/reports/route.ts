@@ -380,6 +380,17 @@ export async function GET(req: Request, ctx: RouteCtx) {
     }
     const canonicalLoopedPages = loopNodes.size;
     const canonicalLoopCount = loopSignatures.size;
+    let canonicalOrphanTargets = 0;
+    for (const [targetKey, group] of canonicalTargets) {
+      const targetExistsAsPage = audits.some((a) => {
+        try {
+          return normalizeUrlForCanonicalCompare(new URL(a.url)) === targetKey;
+        } catch {
+          return false;
+        }
+      });
+      if (!targetExistsAsPage && group.pages.length > 0) canonicalOrphanTargets += 1;
+    }
     const headingIssues = audits.filter(
       (a) => a.h1Count === 0 || a.h1Count > 1 || a.h2Count === 0,
     ).length;
@@ -567,6 +578,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
         canonicalClusteredPages,
         canonicalLoopCount,
         canonicalLoopedPages,
+        canonicalOrphanTargets,
         pagesWithRelNext,
         pagesWithRelPrev,
         pagesWithAmphtml,
@@ -1000,6 +1012,43 @@ export async function GET(req: Request, ctx: RouteCtx) {
         const next = pageToCanonical.get(current);
         if (!next) break;
         current = next;
+      }
+    }
+  } else if (report === "canonical_orphans") {
+    const pagesByKey = new Map<string, (typeof audits)[number]>();
+    for (const a of audits) {
+      try {
+        pagesByKey.set(normalizeUrlForCanonicalCompare(new URL(a.url)), a);
+      } catch {
+        /* skip invalid page URLs */
+      }
+    }
+    const byCanonical = new Map<string, { target: string; pages: typeof audits }>();
+    for (const a of audits) {
+      if (!a.canonicalUrl) continue;
+      try {
+        const canonical = new URL(a.canonicalUrl, a.url);
+        const key = normalizeUrlForCanonicalCompare(canonical);
+        const hit = byCanonical.get(key) ?? { target: canonical.toString(), pages: [] };
+        hit.pages.push(a);
+        byCanonical.set(key, hit);
+      } catch {
+        /* skip invalid canonical */
+      }
+    }
+    for (const [key, group] of byCanonical) {
+      if (pagesByKey.has(key)) continue;
+      for (const row of group.pages) {
+        rows.push({
+          orphan_canonical_target_key: key,
+          orphan_canonical_target_url: group.target,
+          pages_pointing_to_orphan_target: group.pages.length,
+          url: row.url,
+          canonical_raw: row.canonicalUrl,
+          http_status: row.httpStatus,
+          depth: row.depth,
+          title: row.title,
+        });
       }
     }
   } else if (report === "heading_audit") {

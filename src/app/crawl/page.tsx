@@ -102,6 +102,7 @@ type CrawlSummaryResponse = {
     canonicalClusteredPages: number;
     canonicalLoopCount: number;
     canonicalLoopedPages: number;
+    canonicalOrphanTargets: number;
     pagesWithAmphtml: number;
     pagesWithRssFeed: number;
     pagesWithAtomFeed: number;
@@ -248,6 +249,7 @@ export default function CrawlPage() {
       | "canonical_audit"
       | "canonical_clusters"
       | "canonical_loops"
+      | "canonical_orphans"
       | "heading_audit"
       | "site_structure"
       | "url_issues"
@@ -454,6 +456,14 @@ export default function CrawlPage() {
                 type="button"
               >
                 Canonical Loops CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("canonical_orphans", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Canonical Orphans CSV
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
@@ -695,6 +705,7 @@ export default function CrawlPage() {
               <div>Pages in canonical clusters: {reportSummary.canonicalClusteredPages}</div>
               <div>Canonical loops: {reportSummary.canonicalLoopCount}</div>
               <div>Pages in canonical loops: {reportSummary.canonicalLoopedPages}</div>
+              <div>Canonical orphan targets: {reportSummary.canonicalOrphanTargets}</div>
               <div>Pages with amphtml: {reportSummary.pagesWithAmphtml}</div>
               <div>Pages with RSS feed: {reportSummary.pagesWithRssFeed}</div>
               <div>Pages with Atom feed: {reportSummary.pagesWithAtomFeed}</div>
