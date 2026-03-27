@@ -23,6 +23,7 @@ function classifyIssues(row: {
   htmlLang: string | null;
   viewportMeta: string | null;
   metaRefreshContent: string | null;
+  contentEncodingHeader: string | null;
 }) {
   const issues: string[] = [];
   if (row.fetchError) {
@@ -63,6 +64,7 @@ function classifyIssues(row: {
     if (tk && hk && tk !== hk) issues.push("title_h1_mismatch");
   }
   if (html2xx && row.metaRefreshContent) issues.push("meta_refresh_present");
+  if (html2xx && !row.contentEncodingHeader) issues.push("uncompressed_html_response");
   return issues;
 }
 
@@ -361,6 +363,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
       const hk = normalizeDupKey(a.h1Text);
       return !!tk && !!hk && tk !== hk;
     }).length;
+    const pagesCompressed = audits.filter((a) => !!a.contentEncodingHeader).length;
+    const html2xxUncompressed = html2xxAudits.filter((a) => !a.contentEncodingHeader).length;
+    const pagesWithContentLanguage = audits.filter((a) => !!a.contentLanguageHeader).length;
     const pagesMissingFavicon = html2xxAudits.filter((a) => !a.faviconUrl).length;
     const pagesWithRelNext = audits.filter((a) => !!a.paginationNextUrl).length;
     const pagesWithRelPrev = audits.filter((a) => !!a.paginationPrevUrl).length;
@@ -436,6 +441,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
         pagesWithNofollowLinks,
         pagesWithMetaRefresh,
         pagesWithTitleH1Mismatch,
+        pagesCompressed,
+        html2xxUncompressed,
+        pagesWithContentLanguage,
         pagesMissingFavicon,
         https2xxMissingCacheControl,
         pagesWithRelNext,
@@ -500,6 +508,9 @@ export async function GET(req: Request, ctx: RouteCtx) {
       cache_control: a.cacheControlHeader,
       last_modified: a.lastModifiedHeader,
       etag: a.etagHeader,
+      content_encoding: a.contentEncodingHeader,
+      vary: a.varyHeader,
+      content_language: a.contentLanguageHeader,
       favicon_url: a.faviconUrl,
       meta_refresh: a.metaRefreshContent,
       img_count: a.imgCount,
@@ -1041,6 +1052,20 @@ export async function GET(req: Request, ctx: RouteCtx) {
       etag: a.etagHeader,
       response_time_ms: a.responseTimeMs,
     }));
+  } else if (report === "encoding_audit") {
+    rows = audits.map((a) => {
+      const html2xx = isHtml2xxAudit(a);
+      return {
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        content_encoding: a.contentEncodingHeader,
+        vary: a.varyHeader,
+        content_language: a.contentLanguageHeader,
+        html_2xx_uncompressed: html2xx && !a.contentEncodingHeader,
+      };
+    });
   } else if (report === "security_headers") {
     rows = audits.map((a) => ({
       url: a.url,

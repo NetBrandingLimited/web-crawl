@@ -86,6 +86,9 @@ type CrawlSummaryResponse = {
     totalHashOnlyLinks: number;
     pagesWithMetaRefresh: number;
     pagesWithTitleH1Mismatch: number;
+    pagesCompressed: number;
+    html2xxUncompressed: number;
+    pagesWithContentLanguage: number;
     pagesMissingFavicon: number;
     https2xxMissingCacheControl: number;
     httpsMissingHsts: number;
@@ -236,6 +239,7 @@ export default function CrawlPage() {
       | "hreflang_audit"
       | "security_audit"
       | "caching"
+      | "encoding_audit"
       | "security_headers"
       | "content_quality"
       | "performance"
@@ -490,6 +494,14 @@ export default function CrawlPage() {
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => exportReport("encoding_audit", "csv")}
+                disabled={!jobId}
+                type="button"
+              >
+                Encoding CSV
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportReport("security_headers", "csv")}
                 disabled={!jobId}
                 type="button"
@@ -616,6 +628,9 @@ export default function CrawlPage() {
               <div>Total hash-only links: {reportSummary.totalHashOnlyLinks}</div>
               <div>HTML 2xx w/ meta refresh: {reportSummary.pagesWithMetaRefresh}</div>
               <div>HTML 2xx title≠H1: {reportSummary.pagesWithTitleH1Mismatch}</div>
+              <div>Pages with compression: {reportSummary.pagesCompressed}</div>
+              <div>HTML 2xx uncompressed: {reportSummary.html2xxUncompressed}</div>
+              <div>Pages with content-language: {reportSummary.pagesWithContentLanguage}</div>
               <div>HTML 2xx missing favicon: {reportSummary.pagesMissingFavicon}</div>
               <div>HTTPS 2xx missing Cache-Control: {reportSummary.https2xxMissingCacheControl}</div>
               <div>HTTPS 2xx missing HSTS: {reportSummary.httpsMissingHsts}</div>

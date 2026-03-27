@@ -120,6 +120,9 @@ function extractCachingResponseHeaders(headers: Headers) {
     cacheControlHeader: cleanHeaderValue(headers.get("cache-control"), 512),
     lastModifiedHeader: cleanHeaderValue(headers.get("last-modified"), 128),
     etagHeader: cleanHeaderValue(headers.get("etag"), 256),
+    contentEncodingHeader: cleanHeaderValue(headers.get("content-encoding"), 128),
+    varyHeader: cleanHeaderValue(headers.get("vary"), 512),
+    contentLanguageHeader: cleanHeaderValue(headers.get("content-language"), 128),
   };
 }
 
