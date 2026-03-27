@@ -143,6 +143,19 @@ function normalizeUrlWithoutQueryAndHash(rawUrl: string): string {
   }
 }
 
+function isSchemaDriftError(err: unknown): boolean {
+  const msg = String(err).toLowerCase();
+  return (
+    msg.includes("crawlpageaudit") ||
+    msg.includes("undefinedcolumn") ||
+    msg.includes("unknown column") ||
+    msg.includes("does not exist") ||
+    msg.includes("the column") ||
+    msg.includes("p2022") ||
+    msg.includes("relation")
+  );
+}
+
 function classifyIndexability(a: {
   url: string;
   canonicalUrl: string | null;
@@ -258,7 +271,7 @@ export async function GET(req: Request, ctx: RouteCtx) {
       orderBy: [{ depth: "asc" }, { fetchedAt: "desc" }],
     });
   } catch (err) {
-    if (!String(err).includes("CrawlPageAudit")) throw err;
+    if (!isSchemaDriftError(err)) throw err;
     audits = [];
   }
 
