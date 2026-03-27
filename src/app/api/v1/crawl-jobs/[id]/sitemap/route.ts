@@ -72,13 +72,27 @@ export async function GET(_req: Request, ctx: RouteCtx) {
     return okStatus && !hasNoindex;
   });
 
-  const body = urls
+  const fallbackQueueUrls =
+    urls.length === 0
+      ? await prisma.crawlQueue.findMany({
+          where: { jobId },
+          select: { url: true, depth: true },
+          orderBy: [{ depth: "asc" }, { url: "asc" }],
+        })
+      : [];
+
+  const xmlRows =
+    urls.length > 0
+      ? urls.map((r) => ({ url: r.url, depth: r.depth, lastmod: r.fetchedAt }))
+      : fallbackQueueUrls.map((q) => ({ url: q.url, depth: q.depth, lastmod: new Date() }));
+
+  const body = xmlRows
     .map((r) => {
       const priority = Math.max(0.1, 1 - r.depth * 0.1).toFixed(1);
       return [
         "  <url>",
         `    <loc>${xmlEscape(r.url)}</loc>`,
-        `    <lastmod>${r.fetchedAt.toISOString().slice(0, 10)}</lastmod>`,
+        `    <lastmod>${r.lastmod.toISOString().slice(0, 10)}</lastmod>`,
         "    <changefreq>weekly</changefreq>",
         `    <priority>${priority}</priority>`,
         "  </url>",

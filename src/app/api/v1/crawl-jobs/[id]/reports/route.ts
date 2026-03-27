@@ -1851,6 +1851,18 @@ export async function GET(req: Request, ctx: RouteCtx) {
       .filter((r) => String(r.issues).length > 0 || r.has_non_2xx || r.fetch_error);
   }
 
+  // Universal fallback: if a specific report has no rows, return discovered queue URLs
+  // so users always get a usable CSV/XLS with headers.
+  if (report !== "summary" && rows.length === 0) {
+    fallbackHeaders = ["url", "depth", "queue_state", "note"];
+    rows = queueRows.map((q) => ({
+      url: q.url,
+      depth: q.depth,
+      queue_state: q.state,
+      note: "no_audit_rows_for_this_report",
+    }));
+  }
+
   if (format === "excel") {
     const content = toDelimited(rows, "\t", fallbackHeaders);
     return new NextResponse(content, {
