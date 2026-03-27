@@ -239,8 +239,10 @@ async function safeAuditWrite<T>(op: () => Promise<T>): Promise<T | null> {
     return await op();
   } catch (err) {
     const msg = String(err);
-    if (msg.includes("CrawlPageAudit") || msg.includes("crawlPageAudit")) return null;
+    // Only suppress errors when the audit table/columns aren't available yet (schema drift).
+    // Otherwise rethrow so we can detect real write failures.
     if (isMissingAuditTableError(err)) return null;
+    // Avoid swallowing arbitrary errors that would leave audits empty.
     throw err;
   }
 }
@@ -428,11 +430,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             urlHash,
             url: finalNormalized,
             depth: item.depth,
+            // Write only the minimal set of fields that are safe even during schema drift.
+            // Optional/migrated columns are applied in a follow-up update.
             httpStatus: status,
             contentType,
-            responseTimeMs,
-            ...securityHeaders,
-            ...cachingHeaders,
           },
           update: {
             url: finalNormalized,
@@ -440,10 +441,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             httpStatus: status,
             contentType,
             fetchError: null,
+            fetchedAt: new Date(),
+          },
+        }),
+      );
+
+      // Best-effort enrichment: if new columns don't exist yet, keep the base audit row.
+      await safeAuditWrite(() =>
+        prisma.crawlPageAudit.update({
+          where: { jobId_urlHash: { jobId: item.jobId, urlHash } },
+          data: {
             responseTimeMs,
             ...securityHeaders,
             ...cachingHeaders,
-            fetchedAt: new Date(),
           },
         }),
       );
