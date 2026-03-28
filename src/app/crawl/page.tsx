@@ -228,6 +228,11 @@ type ExportReportKey =
   | "very_high_word_count_html"
   | "slow_html_1s_to_2s"
   | "many_h2_headings"
+  | "success_non_html_urls"
+  | "heavy_mailto_tel_outlinks"
+  | "html_with_query_string"
+  | "many_hreflang_alternates"
+  | "missing_content_hash_html"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -340,6 +345,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "very_high_word_count_html", label: "Very High Word Count (HTML) CSV" },
   { id: "slow_html_1s_to_2s", label: "Slow HTML 1s-2s CSV" },
   { id: "many_h2_headings", label: "Many H2 Headings (12+) CSV" },
+  { id: "success_non_html_urls", label: "2xx Non-HTML URLs CSV" },
+  { id: "heavy_mailto_tel_outlinks", label: "Heavy Mailto/Tel Outlinks CSV" },
+  { id: "html_with_query_string", label: "HTML With Query String CSV" },
+  { id: "many_hreflang_alternates", label: "Many hreflang Alternates (15+) CSV" },
+  { id: "missing_content_hash_html", label: "Missing Content Hash (HTML) CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

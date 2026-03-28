@@ -3380,6 +3380,109 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "success_non_html_urls") {
+    fallbackHeaders = ["url", "depth", "http_status", "content_type", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      const st = a.httpStatus;
+      if (st == null || st < 200 || st >= 300) continue;
+      const ct = (a.contentType ?? "").toLowerCase();
+      if (ct.includes("text/html")) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: st,
+        content_type: a.contentType,
+        title: a.title,
+        issue: "success_non_html",
+      });
+    }
+    rows = out;
+  } else if (report === "heavy_mailto_tel_outlinks") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "links_mailto_count",
+      "links_tel_count",
+      "mailto_tel_total",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      const mailto = a.linksMailtoCount;
+      const tel = a.linksTelCount;
+      const sum = mailto + tel;
+      if (sum < 12) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        links_mailto_count: mailto,
+        links_tel_count: tel,
+        mailto_tel_total: sum,
+        title: a.title,
+        issue: "heavy_mailto_tel_outlinks",
+      });
+    }
+    rows = out;
+  } else if (report === "html_with_query_string") {
+    fallbackHeaders = ["url", "depth", "http_status", "query_string", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      let queryString: string | null = null;
+      try {
+        const u = new URL(a.url);
+        if ([...u.searchParams.keys()].length === 0) continue;
+        queryString = u.search.startsWith("?") ? u.search.slice(1) : u.search;
+      } catch {
+        continue;
+      }
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        query_string: queryString,
+        title: a.title,
+        issue: "url_has_query_string",
+      });
+    }
+    rows = out;
+  } else if (report === "many_hreflang_alternates") {
+    fallbackHeaders = ["url", "depth", "http_status", "hreflang_count", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.hreflangCount <= 15) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        hreflang_count: a.hreflangCount,
+        title: a.title,
+        issue: "many_hreflang_alternates",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_content_hash_html") {
+    fallbackHeaders = ["url", "depth", "http_status", "content_hash", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.contentHash && String(a.contentHash).trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_hash: a.contentHash,
+        title: a.title,
+        issue: "missing_content_hash",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);
