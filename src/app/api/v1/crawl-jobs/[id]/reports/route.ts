@@ -2686,6 +2686,86 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "missing_og_title") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "og_title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.ogTitle && a.ogTitle.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        og_title: a.ogTitle,
+        issue: "missing_og_title",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_og_description") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "og_description", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.ogDescription && a.ogDescription.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        og_description: a.ogDescription,
+        issue: "missing_og_description",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_og_image") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "og_image", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.ogImage && a.ogImage.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        og_image: a.ogImage,
+        issue: "missing_og_image",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_twitter_card") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "twitter_card", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.twitterCard && a.twitterCard.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        twitter_card: a.twitterCard,
+        issue: "missing_twitter_card",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_twitter_title") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "twitter_title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.twitterTitle && a.twitterTitle.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        twitter_title: a.twitterTitle,
+        issue: "missing_twitter_title",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);

@@ -193,6 +193,11 @@ type ExportReportKey =
   | "missing_hreflang"
   | "missing_json_ld"
   | "pagination_rel_incomplete"
+  | "missing_og_title"
+  | "missing_og_description"
+  | "missing_og_image"
+  | "missing_twitter_card"
+  | "missing_twitter_title"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -270,6 +275,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "missing_hreflang", label: "Missing hreflang CSV" },
   { id: "missing_json_ld", label: "Missing JSON-LD CSV" },
   { id: "pagination_rel_incomplete", label: "Pagination rel Incomplete CSV" },
+  { id: "missing_og_title", label: "Missing OG Title CSV" },
+  { id: "missing_og_description", label: "Missing OG Description CSV" },
+  { id: "missing_og_image", label: "Missing OG Image CSV" },
+  { id: "missing_twitter_card", label: "Missing Twitter Card CSV" },
+  { id: "missing_twitter_title", label: "Missing Twitter Title CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },
