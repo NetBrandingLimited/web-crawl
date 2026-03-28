@@ -8,6 +8,19 @@ const DEFAULT_MAX_DEPTH = 10;
 const DEFAULT_MAX_PAGES = 600;
 const URLS_TABLE_LIMIT = 500;
 
+function describeFetchFailure(err: unknown, what: string): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const network =
+    err instanceof TypeError ||
+    msg === "Failed to fetch" ||
+    msg === "NetworkError when attempting to fetch resource." ||
+    msg.includes("Load failed");
+  if (network) {
+    return `${what}: the browser got no response (network error). Check that the Next dev server is running (npm run dev), you opened this page from that same origin (e.g. http://localhost:3000/crawl — not a file:// URL), and DATABASE_URL points to a reachable Postgres database.`;
+  }
+  return err instanceof Error ? err.message : "Request failed";
+}
+
 type CrawlJobCreateResponse = {
   id: string;
   status: string;
@@ -446,7 +459,7 @@ export default function CrawlPage() {
       await refresh(id);
       await loadUrls(id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Crawl worker failed");
+      setError(describeFetchFailure(e, "Crawl worker"));
     } finally {
       setCrawling(false);
     }
@@ -478,7 +491,7 @@ export default function CrawlPage() {
       await loadUrls(json.id);
       await drainWorkerForJob(json.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to start crawl");
+      setError(describeFetchFailure(e, "Start crawl"));
     } finally {
       setLoading(false);
     }
