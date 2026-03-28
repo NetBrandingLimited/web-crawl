@@ -233,6 +233,11 @@ type ExportReportKey =
   | "html_with_query_string"
   | "many_hreflang_alternates"
   | "missing_content_hash_html"
+  | "deep_crawl_urls"
+  | "image_heavy_html"
+  | "many_json_ld_blocks"
+  | "html_url_with_fragment"
+  | "x_robots_tag_present"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -350,6 +355,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "html_with_query_string", label: "HTML With Query String CSV" },
   { id: "many_hreflang_alternates", label: "Many hreflang Alternates (15+) CSV" },
   { id: "missing_content_hash_html", label: "Missing Content Hash (HTML) CSV" },
+  { id: "deep_crawl_urls", label: "Deep Crawl URLs (depth 7+) CSV" },
+  { id: "image_heavy_html", label: "Image-Heavy HTML (40+ imgs) CSV" },
+  { id: "many_json_ld_blocks", label: "Many JSON-LD Blocks (5+) CSV" },
+  { id: "html_url_with_fragment", label: "HTML URL With Fragment CSV" },
+  { id: "x_robots_tag_present", label: "X-Robots-Tag Present CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

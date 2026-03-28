@@ -3483,6 +3483,102 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "deep_crawl_urls") {
+    fallbackHeaders = ["url", "depth", "http_status", "content_type", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (a.depth < 7) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        title: a.title,
+        issue: "deep_crawl_depth",
+      });
+    }
+    rows = out;
+  } else if (report === "image_heavy_html") {
+    fallbackHeaders = ["url", "depth", "http_status", "img_count", "img_missing_alt_count", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.imgCount < 40) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        img_count: a.imgCount,
+        img_missing_alt_count: a.imgMissingAltCount,
+        title: a.title,
+        issue: "image_heavy_page",
+      });
+    }
+    rows = out;
+  } else if (report === "many_json_ld_blocks") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "json_ld_count",
+      "json_ld_types",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.jsonLdCount < 5) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        json_ld_count: a.jsonLdCount,
+        json_ld_types: a.jsonLdTypesSummary,
+        title: a.title,
+        issue: "many_json_ld_blocks",
+      });
+    }
+    rows = out;
+  } else if (report === "html_url_with_fragment") {
+    fallbackHeaders = ["url", "depth", "http_status", "url_fragment", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      let fragment: string | null = null;
+      try {
+        const u = new URL(a.url);
+        if (!u.hash || u.hash.length <= 1) continue;
+        fragment = u.hash.slice(1);
+      } catch {
+        continue;
+      }
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        url_fragment: fragment,
+        title: a.title,
+        issue: "url_contains_fragment",
+      });
+    }
+    rows = out;
+  } else if (report === "x_robots_tag_present") {
+    fallbackHeaders = ["url", "depth", "http_status", "x_robots_tag", "robots_meta", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!a.xRobotsTag?.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        x_robots_tag: a.xRobotsTag,
+        robots_meta: a.robotsMeta,
+        title: a.title,
+        issue: "x_robots_tag_present",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);
