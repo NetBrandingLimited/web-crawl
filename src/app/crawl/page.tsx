@@ -203,6 +203,11 @@ type ExportReportKey =
   | "nofollow_directive_urls"
   | "non_robots_fetch_errors"
   | "missing_cache_control"
+  | "sensitive_query_params"
+  | "insecure_canonical_urls"
+  | "redirect_response_urls"
+  | "client_error_urls"
+  | "server_error_urls"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -290,6 +295,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "nofollow_directive_urls", label: "Nofollow Directive URLs CSV" },
   { id: "non_robots_fetch_errors", label: "Fetch Errors (non-robots) CSV" },
   { id: "missing_cache_control", label: "Missing Cache-Control CSV" },
+  { id: "sensitive_query_params", label: "Sensitive Query Params CSV" },
+  { id: "insecure_canonical_urls", label: "Insecure Canonical URLs CSV" },
+  { id: "redirect_response_urls", label: "3xx Response URLs CSV" },
+  { id: "client_error_urls", label: "4xx Response URLs CSV" },
+  { id: "server_error_urls", label: "5xx Response URLs CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

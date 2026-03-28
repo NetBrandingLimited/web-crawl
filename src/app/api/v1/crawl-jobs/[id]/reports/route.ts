@@ -281,6 +281,22 @@ function isHttps2xxAudit(a: { url: string; httpStatus: number | null }) {
   }
 }
 
+function sensitiveQueryParamKeyHits(rawUrl: string): string[] {
+  try {
+    const u = new URL(rawUrl);
+    const hits: string[] = [];
+    for (const key of u.searchParams.keys()) {
+      const k = key.toLowerCase();
+      if (k.includes("token") || k.includes("password") || k.includes("secret") || k.includes("key")) {
+        hits.push(key);
+      }
+    }
+    return [...new Set(hits)];
+  } catch {
+    return [];
+  }
+}
+
 function collectSecurityAuditIssues(a: {
   url: string;
   canonicalUrl: string | null;
@@ -2861,6 +2877,99 @@ export async function GET(req: Request, ctx: RouteCtx) {
         cache_control_header: a.cacheControlHeader,
         title: a.title,
         issue: "missing_cache_control",
+      });
+    }
+    rows = out;
+  } else if (report === "sensitive_query_params") {
+    fallbackHeaders = ["url", "depth", "http_status", "sensitive_query_keys", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      const hits = sensitiveQueryParamKeyHits(a.url);
+      if (hits.length === 0) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        sensitive_query_keys: hits.join("|"),
+        title: a.title,
+        issue: "sensitive_query_param",
+      });
+    }
+    rows = out;
+  } else if (report === "insecure_canonical_urls") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "canonical_raw",
+      "canonical_resolved",
+      "canonical_protocol",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!a.canonicalUrl) continue;
+      try {
+        const c = new URL(a.canonicalUrl, a.url);
+        if (c.protocol === "https:") continue;
+        out.push({
+          url: a.url,
+          depth: a.depth,
+          http_status: a.httpStatus,
+          canonical_raw: a.canonicalUrl,
+          canonical_resolved: c.toString(),
+          canonical_protocol: c.protocol.replace(":", ""),
+          issue: "insecure_canonical",
+        });
+      } catch {
+        /* skip invalid */
+      }
+    }
+    rows = out;
+  } else if (report === "redirect_response_urls") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      const st = a.httpStatus;
+      if (st == null || st < 300 || st >= 400) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: st,
+        title: a.title,
+        issue: "redirect_response",
+      });
+    }
+    rows = out;
+  } else if (report === "client_error_urls") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "fetch_error", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      const st = a.httpStatus;
+      if (st == null || st < 400 || st >= 500) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: st,
+        title: a.title,
+        fetch_error: a.fetchError,
+        issue: "client_error",
+      });
+    }
+    rows = out;
+  } else if (report === "server_error_urls") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "fetch_error", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      const st = a.httpStatus;
+      if (st == null || st < 500 || st >= 600) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: st,
+        title: a.title,
+        fetch_error: a.fetchError,
+        issue: "server_error",
       });
     }
     rows = out;
