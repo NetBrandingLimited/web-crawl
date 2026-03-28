@@ -188,6 +188,11 @@ type ExportReportKey =
   | "uncompressed_html"
   | "missing_charset_meta"
   | "noindex_urls"
+  | "missing_h2"
+  | "missing_favicon"
+  | "missing_hreflang"
+  | "missing_json_ld"
+  | "pagination_rel_incomplete"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -260,6 +265,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "uncompressed_html", label: "Uncompressed HTML CSV" },
   { id: "missing_charset_meta", label: "Missing Charset Meta CSV" },
   { id: "noindex_urls", label: "Noindex URLs CSV" },
+  { id: "missing_h2", label: "Missing H2 CSV" },
+  { id: "missing_favicon", label: "Missing Favicon CSV" },
+  { id: "missing_hreflang", label: "Missing hreflang CSV" },
+  { id: "missing_json_ld", label: "Missing JSON-LD CSV" },
+  { id: "pagination_rel_incomplete", label: "Pagination rel Incomplete CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

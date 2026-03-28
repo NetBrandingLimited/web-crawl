@@ -2585,6 +2585,107 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "missing_h2") {
+    fallbackHeaders = ["url", "depth", "http_status", "h2_count", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.h2Count !== 0) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        h2_count: a.h2Count,
+        title: a.title,
+        issue: "missing_h2",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_favicon") {
+    fallbackHeaders = ["url", "depth", "http_status", "favicon_url", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.faviconUrl && a.faviconUrl.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        favicon_url: a.faviconUrl,
+        title: a.title,
+        issue: "missing_favicon",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_hreflang") {
+    fallbackHeaders = ["url", "depth", "http_status", "hreflang_count", "canonical_url", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.hreflangCount > 0) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        hreflang_count: a.hreflangCount,
+        canonical_url: a.canonicalUrl,
+        title: a.title,
+        issue: "missing_hreflang",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_json_ld") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "json_ld_count",
+      "json_ld_types",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.jsonLdCount > 0) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        json_ld_count: a.jsonLdCount,
+        json_ld_types: a.jsonLdTypesSummary,
+        title: a.title,
+        issue: "missing_json_ld",
+      });
+    }
+    rows = out;
+  } else if (report === "pagination_rel_incomplete") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "pagination_next_url",
+      "pagination_prev_url",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      const hasNext = !!(a.paginationNextUrl && a.paginationNextUrl.trim());
+      const hasPrev = !!(a.paginationPrevUrl && a.paginationPrevUrl.trim());
+      if ((hasNext && hasPrev) || (!hasNext && !hasPrev)) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        pagination_next_url: a.paginationNextUrl,
+        pagination_prev_url: a.paginationPrevUrl,
+        title: a.title,
+        issue: hasNext && !hasPrev ? "pagination_next_without_prev" : "pagination_prev_without_next",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);
