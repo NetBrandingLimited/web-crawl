@@ -223,6 +223,11 @@ type ExportReportKey =
   | "html_feed_link_present"
   | "json_ld_missing_types_summary"
   | "high_external_link_ratio"
+  | "html_zero_outlinks"
+  | "high_nofollow_link_ratio"
+  | "very_high_word_count_html"
+  | "slow_html_1s_to_2s"
+  | "many_h2_headings"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -330,6 +335,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "html_feed_link_present", label: "HTML With Feed Link CSV" },
   { id: "json_ld_missing_types_summary", label: "JSON-LD Missing Types Summary CSV" },
   { id: "high_external_link_ratio", label: "High External Link Ratio CSV" },
+  { id: "html_zero_outlinks", label: "HTML Zero Outlinks CSV" },
+  { id: "high_nofollow_link_ratio", label: "High Nofollow Link Ratio CSV" },
+  { id: "very_high_word_count_html", label: "Very High Word Count (HTML) CSV" },
+  { id: "slow_html_1s_to_2s", label: "Slow HTML 1s-2s CSV" },
+  { id: "many_h2_headings", label: "Many H2 Headings (12+) CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

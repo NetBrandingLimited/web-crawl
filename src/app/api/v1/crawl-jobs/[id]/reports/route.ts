@@ -3284,6 +3284,102 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "html_zero_outlinks") {
+    fallbackHeaders = ["url", "depth", "http_status", "links_out_count", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.linksOutCount !== 0) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        links_out_count: a.linksOutCount,
+        title: a.title,
+        issue: "no_outlinks",
+      });
+    }
+    rows = out;
+  } else if (report === "high_nofollow_link_ratio") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "links_out_count",
+      "links_nofollow_count",
+      "nofollow_ratio",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      const total = a.linksOutCount;
+      const nf = a.linksNofollowCount;
+      if (total < 8) continue;
+      const ratio = nf / total;
+      if (ratio < 0.5) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        links_out_count: total,
+        links_nofollow_count: nf,
+        nofollow_ratio: Math.round(ratio * 1000) / 1000,
+        title: a.title,
+        issue: "high_nofollow_link_ratio",
+      });
+    }
+    rows = out;
+  } else if (report === "very_high_word_count_html") {
+    fallbackHeaders = ["url", "depth", "http_status", "word_count", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.wordCount < 3000) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        word_count: a.wordCount,
+        title: a.title,
+        issue: "very_high_word_count",
+      });
+    }
+    rows = out;
+  } else if (report === "slow_html_1s_to_2s") {
+    fallbackHeaders = ["url", "depth", "http_status", "response_time_ms", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      const rt = a.responseTimeMs;
+      if (rt == null || rt < 1000 || rt >= 2000) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        response_time_ms: rt,
+        title: a.title,
+        issue: "slow_response_1s_to_2s",
+      });
+    }
+    rows = out;
+  } else if (report === "many_h2_headings") {
+    fallbackHeaders = ["url", "depth", "http_status", "h2_count", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.h2Count < 12) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        h2_count: a.h2Count,
+        title: a.title,
+        issue: "many_h2_headings",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);
