@@ -208,6 +208,11 @@ type ExportReportKey =
   | "redirect_response_urls"
   | "client_error_urls"
   | "server_error_urls"
+  | "missing_hsts_https"
+  | "missing_csp_https"
+  | "missing_x_content_type_options_https"
+  | "missing_x_frame_options_https"
+  | "missing_referrer_policy_https"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -300,6 +305,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "redirect_response_urls", label: "3xx Response URLs CSV" },
   { id: "client_error_urls", label: "4xx Response URLs CSV" },
   { id: "server_error_urls", label: "5xx Response URLs CSV" },
+  { id: "missing_hsts_https", label: "HTTPS Missing HSTS CSV" },
+  { id: "missing_csp_https", label: "HTTPS Missing CSP CSV" },
+  { id: "missing_x_content_type_options_https", label: "HTTPS Missing X-Content-Type-Options CSV" },
+  { id: "missing_x_frame_options_https", label: "HTTPS Missing X-Frame-Options CSV" },
+  { id: "missing_referrer_policy_https", label: "HTTPS Missing Referrer-Policy CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

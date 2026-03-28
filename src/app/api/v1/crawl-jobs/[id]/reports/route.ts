@@ -2973,6 +2973,115 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "missing_hsts_https") {
+    fallbackHeaders = ["url", "depth", "http_status", "content_type", "hsts_header", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHttps2xxAudit(a)) continue;
+      if (a.hstsHeader && a.hstsHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        hsts_header: a.hstsHeader,
+        title: a.title,
+        issue: "missing_strict_transport_security",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_csp_https") {
+    fallbackHeaders = ["url", "depth", "http_status", "content_type", "csp_header", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHttps2xxAudit(a)) continue;
+      if (a.cspHeader && a.cspHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        csp_header: a.cspHeader,
+        title: a.title,
+        issue: "missing_content_security_policy",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_x_content_type_options_https") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "content_type",
+      "x_content_type_options_header",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHttps2xxAudit(a)) continue;
+      if (a.xContentTypeOptionsHeader && a.xContentTypeOptionsHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        x_content_type_options_header: a.xContentTypeOptionsHeader,
+        title: a.title,
+        issue: "missing_x_content_type_options",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_x_frame_options_https") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "content_type",
+      "x_frame_options_header",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHttps2xxAudit(a)) continue;
+      if (a.xFrameOptionsHeader && a.xFrameOptionsHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        x_frame_options_header: a.xFrameOptionsHeader,
+        title: a.title,
+        issue: "missing_x_frame_options",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_referrer_policy_https") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "content_type",
+      "referrer_policy_header",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHttps2xxAudit(a)) continue;
+      if (a.referrerPolicyHeader && a.referrerPolicyHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        referrer_policy_header: a.referrerPolicyHeader,
+        title: a.title,
+        issue: "missing_referrer_policy",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);
