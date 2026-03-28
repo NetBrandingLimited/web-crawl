@@ -629,13 +629,16 @@ export default function CrawlPage() {
         </div>
 
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
+          <div className="border-b border-zinc-100 px-6 py-4">
             <div className="text-sm font-medium">Phase 1 Reports</div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+            <p className="mt-1 text-xs text-zinc-500">
+              {REPORT_BUTTONS.length + 1} downloads (CSV exports + sitemap). Scroll the list on smaller screens.
+            </p>
+            <div className="mt-4 grid max-h-[min(70vh,720px)] grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
               {REPORT_BUTTONS.map((report) => (
                 <button
                   key={report.id}
-                  className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                  className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-left text-xs hover:bg-zinc-50 disabled:opacity-50"
                   onClick={() => exportReport(report.id, "csv")}
                   disabled={!jobId}
                   type="button"
@@ -644,7 +647,7 @@ export default function CrawlPage() {
                 </button>
               ))}
               <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-left text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => exportSitemapXml()}
                 disabled={!jobId}
                 type="button"
