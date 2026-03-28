@@ -183,6 +183,11 @@ type ExportReportKey =
   | "missing_viewport_meta"
   | "images_missing_alt"
   | "title_h1_mismatch"
+  | "meta_refresh_present"
+  | "slow_html_responses"
+  | "uncompressed_html"
+  | "missing_charset_meta"
+  | "noindex_urls"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -250,6 +255,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "missing_viewport_meta", label: "Missing Viewport Meta CSV" },
   { id: "images_missing_alt", label: "Images Missing Alt CSV" },
   { id: "title_h1_mismatch", label: "Title / H1 Mismatch CSV" },
+  { id: "meta_refresh_present", label: "Meta Refresh Present CSV" },
+  { id: "slow_html_responses", label: "Slow HTML Responses (5s+) CSV" },
+  { id: "uncompressed_html", label: "Uncompressed HTML CSV" },
+  { id: "missing_charset_meta", label: "Missing Charset Meta CSV" },
+  { id: "noindex_urls", label: "Noindex URLs CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

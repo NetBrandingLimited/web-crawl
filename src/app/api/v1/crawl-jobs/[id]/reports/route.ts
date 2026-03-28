@@ -2506,6 +2506,85 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "meta_refresh_present") {
+    fallbackHeaders = ["url", "depth", "http_status", "meta_refresh_content", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (!a.metaRefreshContent?.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        meta_refresh_content: a.metaRefreshContent,
+        title: a.title,
+        issue: "meta_refresh_present",
+      });
+    }
+    rows = out;
+  } else if (report === "slow_html_responses") {
+    fallbackHeaders = ["url", "depth", "http_status", "response_time_ms", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.responseTimeMs == null || a.responseTimeMs < 5000) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        response_time_ms: a.responseTimeMs,
+        title: a.title,
+        issue: "slow_response",
+      });
+    }
+    rows = out;
+  } else if (report === "uncompressed_html") {
+    fallbackHeaders = ["url", "depth", "http_status", "content_encoding_header", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.contentEncodingHeader && a.contentEncodingHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_encoding_header: a.contentEncodingHeader,
+        title: a.title,
+        issue: "uncompressed_html_response",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_charset_meta") {
+    fallbackHeaders = ["url", "depth", "http_status", "charset_meta", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.charsetMeta && a.charsetMeta.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        charset_meta: a.charsetMeta,
+        title: a.title,
+        issue: "missing_charset_meta",
+      });
+    }
+    rows = out;
+  } else if (report === "noindex_urls") {
+    fallbackHeaders = ["url", "depth", "http_status", "robots_meta", "x_robots_tag", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!hasRobotsNoindex(a.robotsMeta, a.xRobotsTag)) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        robots_meta: a.robotsMeta,
+        x_robots_tag: a.xRobotsTag,
+        issue: "noindex_directive",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);
