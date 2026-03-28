@@ -3172,6 +3172,118 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "html_non_2xx_responses") {
+    fallbackHeaders = ["url", "depth", "http_status", "content_type", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      const ct = (a.contentType ?? "").toLowerCase();
+      if (!ct.includes("text/html")) continue;
+      const st = a.httpStatus;
+      if (st != null && st >= 200 && st < 300) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        title: a.title,
+        issue: "html_non_2xx",
+      });
+    }
+    rows = out;
+  } else if (report === "html_amphtml_link_present") {
+    fallbackHeaders = ["url", "depth", "http_status", "amphtml_url", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (!a.amphtmlUrl?.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        amphtml_url: a.amphtmlUrl,
+        title: a.title,
+        issue: "amphtml_link_present",
+      });
+    }
+    rows = out;
+  } else if (report === "html_feed_link_present") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "rss_feed_url",
+      "atom_feed_url",
+      "json_feed_url",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      const hasFeed =
+        !!(a.rssFeedUrl?.trim() || a.atomFeedUrl?.trim() || a.jsonFeedUrl?.trim());
+      if (!hasFeed) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        rss_feed_url: a.rssFeedUrl,
+        atom_feed_url: a.atomFeedUrl,
+        json_feed_url: a.jsonFeedUrl,
+        title: a.title,
+        issue: "feed_link_present",
+      });
+    }
+    rows = out;
+  } else if (report === "json_ld_missing_types_summary") {
+    fallbackHeaders = ["url", "depth", "http_status", "json_ld_count", "json_ld_types", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.jsonLdCount <= 0) continue;
+      if (a.jsonLdTypesSummary && a.jsonLdTypesSummary.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        json_ld_count: a.jsonLdCount,
+        json_ld_types: a.jsonLdTypesSummary,
+        title: a.title,
+        issue: "json_ld_types_summary_missing",
+      });
+    }
+    rows = out;
+  } else if (report === "high_external_link_ratio") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "links_out_count",
+      "links_external_count",
+      "external_ratio",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      const total = a.linksOutCount;
+      const ext = a.linksExternalCount;
+      if (total < 8) continue;
+      const ratio = ext / total;
+      if (ratio < 0.5) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        links_out_count: total,
+        links_external_count: ext,
+        external_ratio: Math.round(ratio * 1000) / 1000,
+        title: a.title,
+        issue: "high_external_link_ratio",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);

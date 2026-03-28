@@ -218,6 +218,11 @@ type ExportReportKey =
   | "missing_last_modified_html"
   | "missing_vary_html"
   | "slow_html_2s_to_5s"
+  | "html_non_2xx_responses"
+  | "html_amphtml_link_present"
+  | "html_feed_link_present"
+  | "json_ld_missing_types_summary"
+  | "high_external_link_ratio"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -320,6 +325,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "missing_last_modified_html", label: "Missing Last-Modified (HTML) CSV" },
   { id: "missing_vary_html", label: "Missing Vary (HTML) CSV" },
   { id: "slow_html_2s_to_5s", label: "Slow HTML 2s-5s CSV" },
+  { id: "html_non_2xx_responses", label: "HTML Non-2xx Responses CSV" },
+  { id: "html_amphtml_link_present", label: "HTML With AMP Link CSV" },
+  { id: "html_feed_link_present", label: "HTML With Feed Link CSV" },
+  { id: "json_ld_missing_types_summary", label: "JSON-LD Missing Types Summary CSV" },
+  { id: "high_external_link_ratio", label: "High External Link Ratio CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },
