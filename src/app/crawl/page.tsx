@@ -213,6 +213,11 @@ type ExportReportKey =
   | "missing_x_content_type_options_https"
   | "missing_x_frame_options_https"
   | "missing_referrer_policy_https"
+  | "missing_permissions_policy_https"
+  | "missing_etag_html"
+  | "missing_last_modified_html"
+  | "missing_vary_html"
+  | "slow_html_2s_to_5s"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -310,6 +315,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "missing_x_content_type_options_https", label: "HTTPS Missing X-Content-Type-Options CSV" },
   { id: "missing_x_frame_options_https", label: "HTTPS Missing X-Frame-Options CSV" },
   { id: "missing_referrer_policy_https", label: "HTTPS Missing Referrer-Policy CSV" },
+  { id: "missing_permissions_policy_https", label: "HTTPS Missing Permissions-Policy CSV" },
+  { id: "missing_etag_html", label: "Missing ETag (HTML) CSV" },
+  { id: "missing_last_modified_html", label: "Missing Last-Modified (HTML) CSV" },
+  { id: "missing_vary_html", label: "Missing Vary (HTML) CSV" },
+  { id: "slow_html_2s_to_5s", label: "Slow HTML 2s-5s CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },

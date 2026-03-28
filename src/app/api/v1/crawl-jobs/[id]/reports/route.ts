@@ -3082,6 +3082,96 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "missing_permissions_policy_https") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "content_type",
+      "permissions_policy_header",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHttps2xxAudit(a)) continue;
+      if (a.permissionsPolicyHeader && a.permissionsPolicyHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        permissions_policy_header: a.permissionsPolicyHeader,
+        title: a.title,
+        issue: "missing_permissions_policy",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_etag_html") {
+    fallbackHeaders = ["url", "depth", "http_status", "etag_header", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.etagHeader && a.etagHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        etag_header: a.etagHeader,
+        title: a.title,
+        issue: "missing_etag",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_last_modified_html") {
+    fallbackHeaders = ["url", "depth", "http_status", "last_modified_header", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.lastModifiedHeader && a.lastModifiedHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        last_modified_header: a.lastModifiedHeader,
+        title: a.title,
+        issue: "missing_last_modified",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_vary_html") {
+    fallbackHeaders = ["url", "depth", "http_status", "vary_header", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.varyHeader && a.varyHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        vary_header: a.varyHeader,
+        title: a.title,
+        issue: "missing_vary",
+      });
+    }
+    rows = out;
+  } else if (report === "slow_html_2s_to_5s") {
+    fallbackHeaders = ["url", "depth", "http_status", "response_time_ms", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      const rt = a.responseTimeMs;
+      if (rt == null || rt < 2000 || rt >= 5000) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        response_time_ms: rt,
+        title: a.title,
+        issue: "slow_response_2s_to_5s",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);
