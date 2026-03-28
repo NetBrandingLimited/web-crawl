@@ -3579,6 +3579,107 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "extra_long_titles") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "title_length", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      const len = a.titleLength ?? 0;
+      if (len <= 100) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        title_length: len,
+        issue: "extra_long_title",
+      });
+    }
+    rows = out;
+  } else if (report === "high_internal_link_ratio") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "links_out_count",
+      "links_external_count",
+      "internal_link_count",
+      "internal_ratio",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      const total = a.linksOutCount;
+      const ext = a.linksExternalCount;
+      if (total < 10) continue;
+      const internal = total - ext;
+      if (internal < 0) continue;
+      const ratio = internal / total;
+      if (ratio < 0.85) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        links_out_count: total,
+        links_external_count: ext,
+        internal_link_count: internal,
+        internal_ratio: Math.round(ratio * 1000) / 1000,
+        title: a.title,
+        issue: "high_internal_link_ratio",
+      });
+    }
+    rows = out;
+  } else if (report === "robots_meta_no_x_robots_tag") {
+    fallbackHeaders = ["url", "depth", "http_status", "robots_meta", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!a.robotsMeta?.trim()) continue;
+      if (a.xRobotsTag?.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        robots_meta: a.robotsMeta,
+        title: a.title,
+        issue: "robots_meta_only_no_x_robots_tag",
+      });
+    }
+    rows = out;
+  } else if (report === "single_h1_many_h2") {
+    fallbackHeaders = ["url", "depth", "http_status", "h1_count", "h2_count", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.h1Count !== 1) continue;
+      if (a.h2Count < 20) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        h1_count: a.h1Count,
+        h2_count: a.h2Count,
+        title: a.title,
+        issue: "single_h1_many_h2",
+      });
+    }
+    rows = out;
+  } else if (report === "heavy_mailto_outlinks") {
+    fallbackHeaders = ["url", "depth", "http_status", "links_mailto_count", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.linksMailtoCount < 10) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        links_mailto_count: a.linksMailtoCount,
+        title: a.title,
+        issue: "heavy_mailto_outlinks",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);

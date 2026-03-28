@@ -238,6 +238,11 @@ type ExportReportKey =
   | "many_json_ld_blocks"
   | "html_url_with_fragment"
   | "x_robots_tag_present"
+  | "extra_long_titles"
+  | "high_internal_link_ratio"
+  | "robots_meta_no_x_robots_tag"
+  | "single_h1_many_h2"
+  | "heavy_mailto_outlinks"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -360,6 +365,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "many_json_ld_blocks", label: "Many JSON-LD Blocks (5+) CSV" },
   { id: "html_url_with_fragment", label: "HTML URL With Fragment CSV" },
   { id: "x_robots_tag_present", label: "X-Robots-Tag Present CSV" },
+  { id: "extra_long_titles", label: "Extra Long Titles (100+ chars) CSV" },
+  { id: "high_internal_link_ratio", label: "High Internal Link Ratio CSV" },
+  { id: "robots_meta_no_x_robots_tag", label: "Robots Meta Only (No X-Robots-Tag) CSV" },
+  { id: "single_h1_many_h2", label: "Single H1, Many H2 (20+) CSV" },
+  { id: "heavy_mailto_outlinks", label: "Heavy Mailto Outlinks (10+) CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },
