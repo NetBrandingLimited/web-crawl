@@ -2414,6 +2414,98 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = out;
+  } else if (report === "missing_titles") {
+    fallbackHeaders = ["url", "depth", "http_status", "content_type", "h1_text", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.title && a.title.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        h1_text: a.h1Text,
+        issue: "missing_title",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_html_lang") {
+    fallbackHeaders = ["url", "depth", "http_status", "html_lang", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.htmlLang && a.htmlLang.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        html_lang: a.htmlLang,
+        title: a.title,
+        issue: "missing_html_lang",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_viewport_meta") {
+    fallbackHeaders = ["url", "depth", "http_status", "viewport_meta", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.viewportMeta && a.viewportMeta.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        viewport_meta: a.viewportMeta,
+        title: a.title,
+        issue: "missing_viewport_meta",
+      });
+    }
+    rows = out;
+  } else if (report === "images_missing_alt") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "img_count",
+      "img_missing_alt_count",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.imgMissingAltCount <= 0) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        img_count: a.imgCount,
+        img_missing_alt_count: a.imgMissingAltCount,
+        title: a.title,
+        issue: "images_missing_alt",
+      });
+    }
+    rows = out;
+  } else if (report === "title_h1_mismatch") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "h1_text", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (!a.title || !a.h1Text) continue;
+      const tk = normalizeDupKey(a.title);
+      const hk = normalizeDupKey(a.h1Text);
+      if (!tk || !hk || tk === hk) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        title: a.title,
+        h1_text: a.h1Text,
+        issue: "title_h1_mismatch",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);

@@ -178,6 +178,11 @@ type ExportReportKey =
   | "missing_h1"
   | "multiple_h1"
   | "insecure_http_urls"
+  | "missing_titles"
+  | "missing_html_lang"
+  | "missing_viewport_meta"
+  | "images_missing_alt"
+  | "title_h1_mismatch"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -240,6 +245,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "missing_h1", label: "Missing H1 CSV" },
   { id: "multiple_h1", label: "Multiple H1 CSV" },
   { id: "insecure_http_urls", label: "Insecure HTTP URLs CSV" },
+  { id: "missing_titles", label: "Missing Titles CSV" },
+  { id: "missing_html_lang", label: "Missing HTML Lang CSV" },
+  { id: "missing_viewport_meta", label: "Missing Viewport Meta CSV" },
+  { id: "images_missing_alt", label: "Images Missing Alt CSV" },
+  { id: "title_h1_mismatch", label: "Title / H1 Mismatch CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },
