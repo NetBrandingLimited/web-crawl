@@ -2766,6 +2766,104 @@ export async function GET(req: Request, ctx: RouteCtx) {
       });
     }
     rows = out;
+  } else if (report === "missing_content_language") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "content_language_header",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.contentLanguageHeader && a.contentLanguageHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_language_header: a.contentLanguageHeader,
+        title: a.title,
+        issue: "missing_content_language_header",
+      });
+    }
+    rows = out;
+  } else if (report === "hash_only_internal_links") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "links_out_count",
+      "links_hash_only_count",
+      "title",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.linksHashOnlyCount <= 0) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        links_out_count: a.linksOutCount,
+        links_hash_only_count: a.linksHashOnlyCount,
+        title: a.title,
+        issue: "hash_only_internal_links",
+      });
+    }
+    rows = out;
+  } else if (report === "nofollow_directive_urls") {
+    fallbackHeaders = ["url", "depth", "http_status", "robots_meta", "x_robots_tag", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      const directivesLower = robotsDirectivesLower(a.robotsMeta, a.xRobotsTag);
+      const hasNofollow = directivesLower.includes("nofollow") || directivesLower.includes("none");
+      if (!hasNofollow) continue;
+      const issue = directivesLower.includes("none") ? "robots_none" : "nofollow_directive";
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        robots_meta: a.robotsMeta,
+        x_robots_tag: a.xRobotsTag,
+        issue,
+      });
+    }
+    rows = out;
+  } else if (report === "non_robots_fetch_errors") {
+    fallbackHeaders = ["url", "depth", "http_status", "fetch_error", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!a.fetchError) continue;
+      if (a.fetchError === "robots_disallowed") continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        fetch_error: a.fetchError,
+        title: a.title,
+        issue: "fetch_error",
+      });
+    }
+    rows = out;
+  } else if (report === "missing_cache_control") {
+    fallbackHeaders = ["url", "depth", "http_status", "cache_control_header", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.cacheControlHeader && a.cacheControlHeader.trim()) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        cache_control_header: a.cacheControlHeader,
+        title: a.title,
+        issue: "missing_cache_control",
+      });
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);

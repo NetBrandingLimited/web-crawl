@@ -198,6 +198,11 @@ type ExportReportKey =
   | "missing_og_image"
   | "missing_twitter_card"
   | "missing_twitter_title"
+  | "missing_content_language"
+  | "hash_only_internal_links"
+  | "nofollow_directive_urls"
+  | "non_robots_fetch_errors"
+  | "missing_cache_control"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -280,6 +285,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "missing_og_image", label: "Missing OG Image CSV" },
   { id: "missing_twitter_card", label: "Missing Twitter Card CSV" },
   { id: "missing_twitter_title", label: "Missing Twitter Title CSV" },
+  { id: "missing_content_language", label: "Missing Content-Language CSV" },
+  { id: "hash_only_internal_links", label: "Hash-Only Internal Links CSV" },
+  { id: "nofollow_directive_urls", label: "Nofollow Directive URLs CSV" },
+  { id: "non_robots_fetch_errors", label: "Fetch Errors (non-robots) CSV" },
+  { id: "missing_cache_control", label: "Missing Cache-Control CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },
