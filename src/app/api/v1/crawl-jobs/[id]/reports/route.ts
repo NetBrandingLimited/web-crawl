@@ -2313,6 +2313,107 @@ export async function GET(req: Request, ctx: RouteCtx) {
       }
     }
     rows = out;
+  } else if (report === "missing_canonical") {
+    fallbackHeaders = ["url", "depth", "http_status", "content_type", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.canonicalUrl) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        content_type: a.contentType,
+        title: a.title,
+        issue: "missing_canonical",
+      });
+    }
+    rows = out;
+  } else if (report === "canonical_protocol_mismatch") {
+    fallbackHeaders = [
+      "url",
+      "depth",
+      "http_status",
+      "canonical_raw",
+      "canonical_resolved",
+      "page_protocol",
+      "canonical_protocol",
+      "issue",
+    ];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!a.canonicalUrl) continue;
+      try {
+        const page = new URL(a.url);
+        const canonical = new URL(a.canonicalUrl, a.url);
+        if (page.protocol === canonical.protocol) continue;
+        out.push({
+          url: a.url,
+          depth: a.depth,
+          http_status: a.httpStatus,
+          canonical_raw: a.canonicalUrl,
+          canonical_resolved: canonical.toString(),
+          page_protocol: page.protocol.replace(":", ""),
+          canonical_protocol: canonical.protocol.replace(":", ""),
+          issue: "canonical_protocol_mismatch",
+        });
+      } catch {
+        /* skip invalid */
+      }
+    }
+    rows = out;
+  } else if (report === "missing_h1") {
+    fallbackHeaders = ["url", "depth", "http_status", "h1_count", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.h1Count !== 0) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        h1_count: a.h1Count,
+        title: a.title,
+        issue: "missing_h1",
+      });
+    }
+    rows = out;
+  } else if (report === "multiple_h1") {
+    fallbackHeaders = ["url", "depth", "http_status", "h1_count", "h1_text", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      if (!isHtml2xxAudit(a)) continue;
+      if (a.h1Count <= 1) continue;
+      out.push({
+        url: a.url,
+        depth: a.depth,
+        http_status: a.httpStatus,
+        h1_count: a.h1Count,
+        h1_text: a.h1Text,
+        title: a.title,
+        issue: "multiple_h1",
+      });
+    }
+    rows = out;
+  } else if (report === "insecure_http_urls") {
+    fallbackHeaders = ["url", "depth", "http_status", "title", "issue"];
+    const out: Array<Record<string, unknown>> = [];
+    for (const a of audits) {
+      try {
+        const u = new URL(a.url);
+        if (u.protocol !== "http:") continue;
+        out.push({
+          url: a.url,
+          depth: a.depth,
+          http_status: a.httpStatus,
+          title: a.title,
+          issue: "insecure_http_url",
+        });
+      } catch {
+        /* skip */
+      }
+    }
+    rows = out;
   } else if (report === "indexability_audit") {
     rows = audits.map((a) => {
       const i = classifyIndexability(a);

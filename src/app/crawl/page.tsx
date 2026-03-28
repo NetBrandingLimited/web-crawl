@@ -173,6 +173,11 @@ type ExportReportKey =
   | "long_meta_descriptions"
   | "canonical_with_fragment"
   | "canonical_cross_domain"
+  | "missing_canonical"
+  | "canonical_protocol_mismatch"
+  | "missing_h1"
+  | "multiple_h1"
+  | "insecure_http_urls"
   | "indexability_audit"
   | "directives_audit"
   | "robots_blocked"
@@ -230,6 +235,11 @@ const REPORT_BUTTONS: Array<{ id: ExportReportKey; label: string }> = [
   { id: "long_meta_descriptions", label: "Long Meta Descriptions CSV" },
   { id: "canonical_with_fragment", label: "Canonical With Fragment CSV" },
   { id: "canonical_cross_domain", label: "Canonical Cross-Domain CSV" },
+  { id: "missing_canonical", label: "Missing Canonical CSV" },
+  { id: "canonical_protocol_mismatch", label: "Canonical Protocol Mismatch CSV" },
+  { id: "missing_h1", label: "Missing H1 CSV" },
+  { id: "multiple_h1", label: "Multiple H1 CSV" },
+  { id: "insecure_http_urls", label: "Insecure HTTP URLs CSV" },
   { id: "indexability_audit", label: "Indexability Audit CSV" },
   { id: "directives_audit", label: "Directives CSV" },
   { id: "robots_blocked", label: "Robots blocked CSV" },
