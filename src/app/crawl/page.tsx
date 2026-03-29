@@ -414,6 +414,8 @@ export default function CrawlPage() {
   const [crawlSteps, setCrawlSteps] = useState(0);
   const [reportSummary, setReportSummary] = useState<CrawlSummaryResponse["totals"] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bulkZipBusy, setBulkZipBusy] = useState(false);
+  const [bulkZipProgress, setBulkZipProgress] = useState<string | null>(null);
 
   const summary = useMemo(() => {
     if (!status) return null;
@@ -560,6 +562,74 @@ export default function CrawlPage() {
     triggerDownload(u);
   }
 
+  async function downloadAllReportsZip() {
+    if (!jobId) return;
+    if (urls.length === 0) {
+      setError("No crawl URLs found for this job yet. Start/continue crawl, then refresh.");
+      return;
+    }
+    setBulkZipBusy(true);
+    setBulkZipProgress("Loading…");
+    setError(null);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const csvFolder = zip.folder("csv");
+      const xmlFolder = zip.folder("xml");
+      if (!csvFolder || !xmlFolder) throw new Error("Could not create csv/ or xml/ in ZIP");
+
+      const entries: Array<{ folder: typeof csvFolder; name: string; url: string }> = REPORT_BUTTONS.map(
+        (r) => ({
+          folder: csvFolder,
+          name: `${r.id}.csv`,
+          url: `/api/v1/crawl-jobs/${jobId}/reports?report=${encodeURIComponent(r.id)}&format=csv`,
+        }),
+      );
+      entries.push({
+        folder: xmlFolder,
+        name: "sitemap.xml",
+        url: `/api/v1/crawl-jobs/${jobId}/sitemap`,
+      });
+
+      const concurrency = 6;
+      for (let i = 0; i < entries.length; i += concurrency) {
+        const slice = entries.slice(i, i + concurrency);
+        const done = Math.min(i + slice.length, entries.length);
+        setBulkZipProgress(`Downloading ${done} / ${entries.length}…`);
+        await Promise.all(
+          slice.map(async (e) => {
+            const res = await fetch(e.url, { cache: "no-store" });
+            if (!res.ok) {
+              const t = await res.text().catch(() => "");
+              throw new Error(
+                `${e.name}: HTTP ${res.status}${t ? ` — ${t.slice(0, 120)}` : ""}`,
+              );
+            }
+            const buf = await res.arrayBuffer();
+            e.folder.file(e.name, buf);
+          }),
+        );
+      }
+
+      setBulkZipProgress("Building ZIP…");
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `crawl-export-${jobId.slice(0, 8)}.zip`;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      setError(describeFetchFailure(e, "Download all (ZIP)"));
+    } finally {
+      setBulkZipBusy(false);
+      setBulkZipProgress(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="w-full px-4 py-8 sm:px-6 lg:px-10 xl:px-12">
@@ -646,6 +716,18 @@ export default function CrawlPage() {
             <div className="text-sm font-medium">Phase 1 Reports</div>
             <p className="mt-1 text-xs text-zinc-500">
               {REPORT_BUTTONS.length + 1} downloads (CSV exports + sitemap). Scroll the list on smaller screens.
+            </p>
+            <button
+              className="mt-3 inline-flex h-10 w-full max-w-md items-center justify-center rounded-lg border-2 border-zinc-900 bg-white text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
+              onClick={() => void downloadAllReportsZip()}
+              disabled={!jobId || bulkZipBusy || urls.length === 0}
+              type="button"
+            >
+              {bulkZipBusy ? (bulkZipProgress ?? "Working…") : "Download all CSV + XML (ZIP)"}
+            </button>
+            <p className="mt-1 text-xs text-zinc-500">
+              One ZIP: folder <span className="font-mono">csv/</span> ({REPORT_BUTTONS.length} files) and{" "}
+              <span className="font-mono">xml/sitemap.xml</span>. May take a minute on large jobs.
             </p>
             <div className="mt-4 grid max-h-[min(70vh,720px)] grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
               {REPORT_BUTTONS.map((report) => (

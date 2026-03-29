@@ -10,12 +10,13 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "worker": "tsx scripts/crawl-worker.ts",
-    "postinstall": "prisma generate"  
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "cheerio": "^1.2.0",
+    "jszip": "^3.10.1",
     "next": "15.3.8",
     "pg": "^8.20.0",
     "react": "^19.0.0",
