@@ -715,7 +715,7 @@ export default function CrawlPage() {
           <div className="border-b border-zinc-100 px-6 py-4">
             <div className="text-sm font-medium">Phase 1 Reports</div>
             <p className="mt-1 text-xs text-zinc-500">
-              {REPORT_BUTTONS.length + 1} downloads (CSV exports + sitemap). Scroll the list on smaller screens.
+              {REPORT_BUTTONS.length + 1} downloads (CSV exports + sitemap).
             </p>
             <button
               className="mt-3 inline-flex h-10 w-full max-w-md items-center justify-center rounded-lg border-2 border-zinc-900 bg-white text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
@@ -729,7 +729,7 @@ export default function CrawlPage() {
               One ZIP: folder <span className="font-mono">csv/</span> ({REPORT_BUTTONS.length} files) and{" "}
               <span className="font-mono">xml/sitemap.xml</span>. May take a minute on large jobs.
             </p>
-            <div className="mt-4 grid max-h-[min(70vh,720px)] grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
               {REPORT_BUTTONS.map((report) => (
                 <button
                   key={report.id}
