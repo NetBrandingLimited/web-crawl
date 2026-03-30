@@ -450,6 +450,8 @@ export default function CrawlPage() {
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
   const [jobsListLoading, setJobsListLoading] = useState(false);
   const [jobsListError, setJobsListError] = useState<string | null>(null);
+  const [jobDirectoryFilter, setJobDirectoryFilter] = useState("");
+  const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
 
   const loadJobListForCompare = useCallback(async () => {
     setJobsListLoading(true);
@@ -480,6 +482,15 @@ export default function CrawlPage() {
   useEffect(() => {
     if (jobId) setCompareJobB((prev) => prev || jobId);
   }, [jobId]);
+
+  useEffect(() => {
+    if (jobsList.length === 0) {
+      setSelectedJobIds([]);
+      return;
+    }
+    const ids = new Set(jobsList.map((j) => j.id));
+    setSelectedJobIds((prev) => prev.filter((id) => ids.has(id)));
+  }, [jobsList]);
 
   /** Drop compare selections that no longer exist in the loaded job list. */
   useEffect(() => {
@@ -587,6 +598,33 @@ export default function CrawlPage() {
       return blob.includes(q);
     });
   }, [urls, urlTableFilter]);
+
+  const filteredJobsDirectory = useMemo(() => {
+    const q = jobDirectoryFilter.trim().toLowerCase();
+    if (!q) return jobsList;
+    return jobsList.filter((j) => {
+      const blob = `${j.seedUrl}\n${j.status}\n${j.id}\n${new Date(j.createdAt).toLocaleString()}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [jobsList, jobDirectoryFilter]);
+
+  const comparePickOptionsA = useMemo(() => {
+    const base = filteredJobsDirectory;
+    if (compareJobA && !base.some((j) => j.id === compareJobA)) {
+      const extra = jobsList.find((j) => j.id === compareJobA);
+      return extra ? [extra, ...base] : base;
+    }
+    return base;
+  }, [filteredJobsDirectory, jobsList, compareJobA]);
+
+  const comparePickOptionsB = useMemo(() => {
+    const base = filteredJobsDirectory;
+    if (compareJobB && !base.some((j) => j.id === compareJobB)) {
+      const extra = jobsList.find((j) => j.id === compareJobB);
+      return extra ? [extra, ...base] : base;
+    }
+    return base;
+  }, [filteredJobsDirectory, jobsList, compareJobB]);
 
   const summary = useMemo(() => {
     if (!status) return null;
@@ -887,11 +925,21 @@ export default function CrawlPage() {
     setCompareJobB("");
   }
 
-  async function deleteCrawlJobRecord(id: string, seedUrlForConfirm: string) {
-    const ok = window.confirm(
-      `Delete this crawl job?\n\n${seedUrlForConfirm}\n\nThis removes its queue rows, page audits, and fetch records from the database. You cannot undo this.`,
-    );
-    if (!ok) return;
+  async function openJobInViewer(id: string) {
+    setError(null);
+    setJobId(id);
+    setCompareJobB((prev) => prev || id);
+    setUrlTableFilter("");
+    await refresh(id);
+  }
+
+  async function deleteCrawlJobRecord(id: string, seedUrlForConfirm: string, skipConfirm = false) {
+    if (!skipConfirm) {
+      const ok = window.confirm(
+        `Delete this crawl job?\n\n${seedUrlForConfirm}\n\nThis removes its queue rows, page audits, and fetch records from the database. You cannot undo this.`,
+      );
+      if (!ok) return;
+    }
     setJobDeleteBusy(id);
     setError(null);
     try {
@@ -917,6 +965,19 @@ export default function CrawlPage() {
     } finally {
       setJobDeleteBusy(null);
     }
+  }
+
+  async function deleteSelectedCrawlJobs() {
+    if (selectedJobIds.length === 0) return;
+    const ok = window.confirm(
+      `Delete ${selectedJobIds.length} selected crawl job(s)?\n\nThis removes their queue rows, page audits, and fetch records. You cannot undo this.`,
+    );
+    if (!ok) return;
+    for (const id of selectedJobIds) {
+      const job = jobsList.find((j) => j.id === id);
+      await deleteCrawlJobRecord(id, job?.seedUrl ?? id, true);
+    }
+    setSelectedJobIds([]);
   }
 
   return (
@@ -1033,6 +1094,25 @@ export default function CrawlPage() {
           {!jobsListError && !jobsListLoading && jobsList.length === 0 ? (
             <div className="mt-2 text-xs text-zinc-500">No crawl jobs returned. Start a crawl above, or check the database connection.</div>
           ) : null}
+          {jobsList.length > 0 ? (
+            <div className="mt-4">
+              <label className="block text-xs font-medium text-zinc-700">
+                Filter jobs
+                <input
+                  className="mt-1 w-full max-w-xl rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10"
+                  value={jobDirectoryFilter}
+                  onChange={(e) => setJobDirectoryFilter(e.target.value)}
+                  placeholder="URL, status, job id, date…"
+                  type="search"
+                />
+              </label>
+              {jobDirectoryFilter.trim() !== "" ? (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Showing {filteredJobsDirectory.length} of {jobsList.length} jobs (compare + past list).
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-xs font-medium text-zinc-700">
               Baseline crawl (A)
@@ -1042,7 +1122,7 @@ export default function CrawlPage() {
                 onChange={(e) => setCompareJobA(e.target.value)}
               >
                 <option value="">Select job…</option>
-                {jobsList.map((j) => (
+                {comparePickOptionsA.map((j) => (
                   <option key={j.id} value={j.id}>
                     {j.seedUrl} — {j.status} ({new Date(j.createdAt).toLocaleString()})
                   </option>
@@ -1057,7 +1137,7 @@ export default function CrawlPage() {
                 onChange={(e) => setCompareJobB(e.target.value)}
               >
                 <option value="">Select job…</option>
-                {jobsList.map((j) => (
+                {comparePickOptionsB.map((j) => (
                   <option key={j.id} value={j.id}>
                     {j.seedUrl} — {j.status} ({new Date(j.createdAt).toLocaleString()})
                   </option>
@@ -1108,18 +1188,29 @@ export default function CrawlPage() {
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm font-medium">Past crawl jobs</div>
-            <button
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-              onClick={() => void loadJobListForCompare()}
-              disabled={jobsListLoading}
-              type="button"
-            >
-              {jobsListLoading ? "Loading…" : "Reload list"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => void loadJobListForCompare()}
+                disabled={jobsListLoading}
+                type="button"
+              >
+                {jobsListLoading ? "Loading…" : "Reload list"}
+              </button>
+              <button
+                className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                onClick={() => void deleteSelectedCrawlJobs()}
+                disabled={jobDeleteBusy !== null || selectedJobIds.length === 0}
+                type="button"
+              >
+                Delete selected ({selectedJobIds.length})
+              </button>
+            </div>
           </div>
           <p className="mt-2 text-xs text-zinc-500">
-            Remove individual jobs from the database (queue, audits, fetches for that job). The list matches the newest {JOB_LIST_LIMIT} jobs; compare
-            dropdowns use the same list.
+            Remove individual jobs from the database (queue, audits, fetches for that job). The list matches the newest {JOB_LIST_LIMIT} jobs. Use{" "}
+            <span className="font-medium">Filter jobs</span> in Phase 2 to narrow this list and the compare dropdowns. <span className="font-medium">View</span>{" "}
+            loads that job into Status, reports, and Discovered URLs above.
           </p>
           {jobsListError ? <div className="mt-2 text-sm text-red-600">{jobsListError}</div> : null}
           <div className="mt-4 max-h-72 overflow-y-auto rounded-lg border border-zinc-100">
@@ -1127,25 +1218,50 @@ export default function CrawlPage() {
               <div className="px-4 py-6 text-sm text-zinc-500">
                 {jobsListLoading ? "Loading jobs…" : "No jobs loaded. Use Reload list or start a crawl."}
               </div>
+            ) : filteredJobsDirectory.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-zinc-500">No jobs match the filter.</div>
             ) : (
               <ul className="divide-y divide-zinc-100 text-sm">
-                {jobsList.map((j) => (
+                {filteredJobsDirectory.map((j) => (
                   <li key={j.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-mono text-xs text-zinc-800">{j.seedUrl}</div>
-                      <div className="mt-0.5 text-xs text-zinc-500">
-                        {j.status} · {new Date(j.createdAt).toLocaleString()} ·{" "}
-                        <span className="font-mono text-[10px] text-zinc-400">{j.id.slice(0, 8)}…</span>
+                    <div className="flex min-w-0 flex-1 items-start gap-2">
+                      <input
+                        className="mt-0.5 h-4 w-4 rounded border-zinc-300"
+                        type="checkbox"
+                        checked={selectedJobIds.includes(j.id)}
+                        onChange={(e) =>
+                          setSelectedJobIds((prev) =>
+                            e.target.checked ? [...prev, j.id] : prev.filter((x) => x !== j.id),
+                          )
+                        }
+                        aria-label={`Select job ${j.id}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-mono text-xs text-zinc-800">{j.seedUrl}</div>
+                        <div className="mt-0.5 text-xs text-zinc-500">
+                          {j.status} · {new Date(j.createdAt).toLocaleString()} ·{" "}
+                          <span className="font-mono text-[10px] text-zinc-400">{j.id.slice(0, 8)}…</span>
+                        </div>
                       </div>
                     </div>
-                    <button
-                      className="shrink-0 rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
-                      type="button"
-                      disabled={jobDeleteBusy !== null}
-                      onClick={() => void deleteCrawlJobRecord(j.id, j.seedUrl)}
-                    >
-                      {jobDeleteBusy === j.id ? "Deleting…" : "Delete"}
-                    </button>
+                    <div className="flex shrink-0 flex-wrap gap-1">
+                      <button
+                        className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                        type="button"
+                        disabled={jobsListLoading}
+                        onClick={() => void openJobInViewer(j.id)}
+                      >
+                        View
+                      </button>
+                      <button
+                        className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        type="button"
+                        disabled={jobDeleteBusy !== null}
+                        onClick={() => void deleteCrawlJobRecord(j.id, j.seedUrl)}
+                      >
+                        {jobDeleteBusy === j.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
