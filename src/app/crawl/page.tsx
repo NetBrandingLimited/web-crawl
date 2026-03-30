@@ -794,6 +794,14 @@ export default function CrawlPage() {
     }
   }
 
+  function clearCompareSelections() {
+    comparePreviewAbortRef.current?.abort();
+    comparePreviewAbortRef.current = null;
+    setCompareDiffPreview(null);
+    setCompareJobA("");
+    setCompareJobB("");
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="w-full px-4 py-8 sm:px-6 lg:px-10 xl:px-12">
@@ -878,13 +886,23 @@ export default function CrawlPage() {
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm font-medium">Phase 2 — Compare crawls</div>
-            <button
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50"
-              onClick={() => void loadJobListForCompare()}
-              type="button"
-            >
-              Reload job list
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50"
+                onClick={() => void loadJobListForCompare()}
+                type="button"
+              >
+                Reload job list
+              </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => clearCompareSelections()}
+                disabled={!compareJobA && !compareJobB}
+                type="button"
+              >
+                Clear A &amp; B
+              </button>
+            </div>
           </div>
           <p className="mt-2 text-xs text-zinc-500">
             Baseline <span className="font-mono">a</span> is usually the earlier crawl; <span className="font-mono">b</span> the later. URLs are matched by
