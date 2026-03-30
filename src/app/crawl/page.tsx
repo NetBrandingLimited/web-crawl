@@ -440,6 +440,7 @@ export default function CrawlPage() {
     counts: CompareDiffCounts | null;
   } | null>(null);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
+  const [urlTableFilter, setUrlTableFilter] = useState("");
 
   const loadJobListForCompare = useCallback(async () => {
     try {
@@ -507,6 +508,19 @@ export default function CrawlPage() {
       comparePreviewAbortRef.current = null;
     };
   }, [compareJobA, compareJobB]);
+
+  useEffect(() => {
+    setUrlTableFilter("");
+  }, [jobId]);
+
+  const filteredUrls = useMemo(() => {
+    const q = urlTableFilter.trim().toLowerCase();
+    if (!q) return urls;
+    return urls.filter((u) => {
+      const blob = `${u.original_url}\n${u.title ?? ""}\n${u.http_status ?? ""}\n${u._queue_state}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [urls, urlTableFilter]);
 
   const summary = useMemo(() => {
     if (!status) return null;
@@ -1091,17 +1105,33 @@ export default function CrawlPage() {
         </div>
 
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
+          <div className="flex flex-col gap-3 border-b border-zinc-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm font-medium">Discovered URLs</div>
-            <button
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-              onClick={() => loadUrls()}
-              disabled={!jobId}
-              type="button"
-            >
-              Reload
-            </button>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              <input
+                className="w-full min-w-[12rem] rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 sm:max-w-md"
+                value={urlTableFilter}
+                onChange={(e) => setUrlTableFilter(e.target.value)}
+                placeholder="Filter by URL, title, status, queue…"
+                disabled={!jobId || urls.length === 0}
+                type="search"
+                aria-label="Filter discovered URLs"
+              />
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => loadUrls()}
+                disabled={!jobId}
+                type="button"
+              >
+                Reload
+              </button>
+            </div>
           </div>
+          {urls.length > 0 && urlTableFilter.trim() !== "" ? (
+            <div className="border-b border-zinc-50 px-6 py-2 text-xs text-zinc-500">
+              Showing {filteredUrls.length} of {urls.length} (table limit {URLS_TABLE_LIMIT})
+            </div>
+          ) : null}
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-zinc-50 text-xs text-zinc-500">
@@ -1120,8 +1150,14 @@ export default function CrawlPage() {
                       No URLs yet.
                     </td>
                   </tr>
+                ) : filteredUrls.length === 0 ? (
+                  <tr>
+                    <td className="px-6 py-6 text-zinc-500" colSpan={5}>
+                      No URLs match your filter.
+                    </td>
+                  </tr>
                 ) : (
-                  urls.map((u) => (
+                  filteredUrls.map((u) => (
                     <tr key={u.id}>
                       <td className="px-6 py-3 font-mono text-xs">{u.original_url}</td>
                       <td className="px-6 py-3">{u.crawl_depth}</td>
