@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const WORKER_STEPS_CAP = 4000;
+const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
 const DEFAULT_MAX_DEPTH = 10;
 // Keep this close to the "about 500 URLs" target so the crawl doesn't explode.
 const DEFAULT_MAX_PAGES = 600;
@@ -436,6 +437,7 @@ export default function CrawlPage() {
     loading: boolean;
     counts: CompareDiffCounts | null;
   } | null>(null);
+  const comparePreviewAbortRef = useRef<AbortController | null>(null);
 
   const loadJobListForCompare = useCallback(async () => {
     try {
@@ -458,38 +460,48 @@ export default function CrawlPage() {
 
   useEffect(() => {
     if (!compareJobA || !compareJobB || compareJobA === compareJobB) {
+      comparePreviewAbortRef.current?.abort();
+      comparePreviewAbortRef.current = null;
       setCompareDiffPreview(null);
       return;
     }
-    const ac = new AbortController();
     setCompareDiffPreview({ loading: true, counts: null });
-    const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json`;
-    void (async () => {
-      try {
-        const res = await fetch(u, { cache: "no-store", signal: ac.signal });
-        if (!res.ok) {
+    const timeoutId = window.setTimeout(() => {
+      comparePreviewAbortRef.current?.abort();
+      const ac = new AbortController();
+      comparePreviewAbortRef.current = ac;
+      const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json`;
+      void (async () => {
+        try {
+          const res = await fetch(u, { cache: "no-store", signal: ac.signal });
+          if (!res.ok) {
+            if (!ac.signal.aborted) setCompareDiffPreview(null);
+            return;
+          }
+          const json = (await res.json()) as { counts?: CompareDiffCounts };
+          const c = json.counts;
+          if (ac.signal.aborted) return;
+          if (
+            c &&
+            typeof c.new_in_b === "number" &&
+            typeof c.removed_in_a === "number" &&
+            typeof c.changed === "number"
+          ) {
+            setCompareDiffPreview({ loading: false, counts: c });
+          } else {
+            setCompareDiffPreview(null);
+          }
+        } catch (e) {
+          if (e instanceof Error && e.name === "AbortError") return;
           if (!ac.signal.aborted) setCompareDiffPreview(null);
-          return;
         }
-        const json = (await res.json()) as { counts?: CompareDiffCounts };
-        const c = json.counts;
-        if (ac.signal.aborted) return;
-        if (
-          c &&
-          typeof c.new_in_b === "number" &&
-          typeof c.removed_in_a === "number" &&
-          typeof c.changed === "number"
-        ) {
-          setCompareDiffPreview({ loading: false, counts: c });
-        } else {
-          setCompareDiffPreview(null);
-        }
-      } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") return;
-        if (!ac.signal.aborted) setCompareDiffPreview(null);
-      }
-    })();
-    return () => ac.abort();
+      })();
+    }, COMPARE_PREVIEW_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timeoutId);
+      comparePreviewAbortRef.current?.abort();
+      comparePreviewAbortRef.current = null;
+    };
   }, [compareJobA, compareJobB]);
 
   const summary = useMemo(() => {
@@ -859,7 +871,8 @@ export default function CrawlPage() {
           <p className="mt-2 text-xs text-zinc-500">
             Baseline <span className="font-mono">a</span> is usually the earlier crawl; <span className="font-mono">b</span> the later. URLs are matched by
             crawl URL hash. Rows: <span className="font-mono">new_in_b</span>, <span className="font-mono">removed_in_a</span>,{" "}
-            <span className="font-mono">changed</span> (status, title, canonical, meta, word count, H1, content-type, robots meta, meta refresh).
+            <span className="font-mono">changed</span> (status, title, canonical, meta, word count, H1, content-type, robots meta, meta refresh, body
+            hash, X-Robots-Tag).
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-xs font-medium text-zinc-700">
