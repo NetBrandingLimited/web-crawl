@@ -444,6 +444,7 @@ export default function CrawlPage() {
   } | null>(null);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const [urlTableFilter, setUrlTableFilter] = useState("");
+  const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
 
   const loadJobListForCompare = useCallback(async () => {
     try {
@@ -824,6 +825,38 @@ export default function CrawlPage() {
     setCompareJobB("");
   }
 
+  async function deleteCrawlJobRecord(id: string, seedUrlForConfirm: string) {
+    const ok = window.confirm(
+      `Delete this crawl job?\n\n${seedUrlForConfirm}\n\nThis removes its queue rows, page audits, and fetch records from the database. You cannot undo this.`,
+    );
+    if (!ok) return;
+    setJobDeleteBusy(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/crawl-jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        setError(body?.message ?? `Delete failed (${res.status}).`);
+        return;
+      }
+      setJobsList((prev) => prev.filter((j) => j.id !== id));
+      if (compareJobA === id) setCompareJobA("");
+      if (compareJobB === id) setCompareJobB("");
+      if (jobId === id) {
+        setJobId(null);
+        setUrls([]);
+        setUrlsNextCursor(null);
+        setStatus(null);
+        setReportSummary(null);
+        setUrlTableFilter("");
+      }
+    } catch (e) {
+      setError(describeFetchFailure(e, "Delete crawl job"));
+    } finally {
+      setJobDeleteBusy(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="w-full px-4 py-8 sm:px-6 lg:px-10 xl:px-12">
@@ -1002,6 +1035,50 @@ export default function CrawlPage() {
               /api/v1/crawl-jobs/compare?a=…&b=…&format=csv|json
             </span>
           </p>
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm font-medium">Past crawl jobs</div>
+            <button
+              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50"
+              onClick={() => void loadJobListForCompare()}
+              type="button"
+            >
+              Reload list
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">
+            Remove individual jobs from the database (queue, audits, fetches for that job). The list matches the newest 100 jobs; compare dropdowns use
+            the same list.
+          </p>
+          <div className="mt-4 max-h-72 overflow-y-auto rounded-lg border border-zinc-100">
+            {jobsList.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-zinc-500">No jobs loaded. Use Reload list or start a crawl.</div>
+            ) : (
+              <ul className="divide-y divide-zinc-100 text-sm">
+                {jobsList.map((j) => (
+                  <li key={j.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-mono text-xs text-zinc-800">{j.seedUrl}</div>
+                      <div className="mt-0.5 text-xs text-zinc-500">
+                        {j.status} · {new Date(j.createdAt).toLocaleString()} ·{" "}
+                        <span className="font-mono text-[10px] text-zinc-400">{j.id.slice(0, 8)}…</span>
+                      </div>
+                    </div>
+                    <button
+                      className="shrink-0 rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      type="button"
+                      disabled={jobDeleteBusy !== null}
+                      onClick={() => void deleteCrawlJobRecord(j.id, j.seedUrl)}
+                    >
+                      {jobDeleteBusy === j.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white shadow-sm">

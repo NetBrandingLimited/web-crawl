@@ -58,3 +58,12 @@ export async function GET(_req: Request, ctx: RouteCtx) {
   });
 }
 
+export async function DELETE(_req: Request, ctx: RouteCtx) {
+  const { id } = await ctx.params;
+  const result = await prisma.crawlJob.deleteMany({ where: { id } });
+  if (result.count === 0) {
+    return NextResponse.json({ error: "not_found", message: "Crawl job not found." }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true, id });
+}
+
