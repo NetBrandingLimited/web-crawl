@@ -12,6 +12,8 @@ const URLS_TABLE_LIMIT = 500;
 /** Past jobs / compare dropdowns: server allows up to 500 (see GET /api/v1/crawl-jobs). */
 const JOB_LIST_LIMIT = 500;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function describeFetchFailure(err: unknown, what: string): string {
   const msg = err instanceof Error ? err.message : String(err);
   const network =
@@ -452,6 +454,8 @@ export default function CrawlPage() {
   const [jobsListError, setJobsListError] = useState<string | null>(null);
   const [jobDirectoryFilter, setJobDirectoryFilter] = useState("");
   const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
+  const [openJobByIdInput, setOpenJobByIdInput] = useState("");
+  const [copiedJobId, setCopiedJobId] = useState<string | null>(null);
 
   const loadJobListForCompare = useCallback(async () => {
     setJobsListLoading(true);
@@ -725,7 +729,10 @@ export default function CrawlPage() {
     if (!effectiveId) return;
     setError(null);
     const res = await fetch(`/api/v1/crawl-jobs/${effectiveId}`, { cache: "no-store" });
-    if (!res.ok) return;
+    if (!res.ok) {
+      setError(res.status === 404 ? "Crawl job not found." : `Could not load job status (${res.status}).`);
+      return;
+    }
     setStatus((await res.json()) as CrawlJobStatusResponse);
     const summaryRes = await fetch(`/api/v1/crawl-jobs/${effectiveId}/reports?report=summary`, {
       cache: "no-store",
@@ -930,12 +937,48 @@ export default function CrawlPage() {
     setCompareJobB("");
   }
 
-  async function openJobInViewer(id: string) {
+  async function openJobInViewer(id: string): Promise<boolean> {
     setError(null);
+    const res = await fetch(`/api/v1/crawl-jobs/${encodeURIComponent(id)}`, { cache: "no-store" });
+    if (!res.ok) {
+      setError(res.status === 404 ? "No crawl job with that id." : `Could not load job (${res.status}).`);
+      return false;
+    }
     setJobId(id);
     setCompareJobB((prev) => prev || id);
     setUrlTableFilter("");
-    await refresh(id);
+    setStatus((await res.json()) as CrawlJobStatusResponse);
+    const summaryRes = await fetch(`/api/v1/crawl-jobs/${id}/reports?report=summary`, { cache: "no-store" });
+    if (summaryRes.ok) {
+      const summaryJson = (await summaryRes.json()) as CrawlSummaryResponse;
+      setReportSummary(summaryJson.totals);
+    }
+    await loadUrls(id);
+    return true;
+  }
+
+  async function openJobByPastedId() {
+    const raw = openJobByIdInput.trim();
+    if (!raw) {
+      setError("Paste a crawl job UUID.");
+      return;
+    }
+    if (!UUID_RE.test(raw)) {
+      setError("That does not look like a crawl job UUID (8-4-4-4-12 hex).");
+      return;
+    }
+    const ok = await openJobInViewer(raw);
+    if (ok) setOpenJobByIdInput("");
+  }
+
+  async function copyJobId(id: string) {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopiedJobId(id);
+      window.setTimeout(() => setCopiedJobId((c) => (c === id ? null : c)), 2000);
+    } catch {
+      setError("Could not copy job id (clipboard blocked or unavailable).");
+    }
   }
 
   async function deleteCrawlJobRecord(id: string, seedUrlForConfirm: string) {
@@ -1044,13 +1087,22 @@ export default function CrawlPage() {
             {jobId ? (
               <div>
                 <div className="font-mono">job: {jobId}</div>
-                <button
-                  className="mt-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 hover:bg-zinc-50"
-                  onClick={() => refresh()}
-                  type="button"
-                >
-                  Refresh
-                </button>
+                <div className="mt-2 flex flex-wrap justify-end gap-2">
+                  <button
+                    className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 hover:bg-zinc-50"
+                    onClick={() => void copyJobId(jobId)}
+                    type="button"
+                  >
+                    {copiedJobId === jobId ? "Copied" : "Copy ID"}
+                  </button>
+                  <button
+                    className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 hover:bg-zinc-50"
+                    onClick={() => refresh()}
+                    type="button"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
             ) : (
               <div>No job yet</div>
@@ -1260,6 +1312,27 @@ export default function CrawlPage() {
             <span className="font-medium">Filter jobs</span> in Phase 2 to narrow this list and the compare dropdowns. <span className="font-medium">View</span>{" "}
             loads that job into Status, reports, and Discovered URLs above.
           </p>
+          <div className="mt-3 flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="block min-w-0 flex-1 text-xs font-medium text-zinc-700">
+              Open job by ID
+              <input
+                className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-xs outline-none focus:ring-2 focus:ring-zinc-900/10"
+                value={openJobByIdInput}
+                onChange={(e) => setOpenJobByIdInput(e.target.value)}
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                disabled={jobDeleteBusy !== null}
+                onKeyDown={(e) => e.key === "Enter" && void openJobByPastedId()}
+              />
+            </label>
+            <button
+              className="h-10 shrink-0 rounded-lg border border-zinc-200 bg-white px-4 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50"
+              type="button"
+              disabled={jobDeleteBusy !== null || jobsListLoading}
+              onClick={() => void openJobByPastedId()}
+            >
+              Load job
+            </button>
+          </div>
           {jobsListError ? <div className="mt-2 text-sm text-red-600">{jobsListError}</div> : null}
           {jobsList.length > 0 && filteredJobsDirectory.length > 0 ? (
             <div className="mt-2">
@@ -1315,6 +1388,14 @@ export default function CrawlPage() {
                         onClick={() => void openJobInViewer(j.id)}
                       >
                         View
+                      </button>
+                      <button
+                        className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                        type="button"
+                        disabled={jobDeleteBusy !== null}
+                        onClick={() => void copyJobId(j.id)}
+                      >
+                        {copiedJobId === j.id ? "Copied" : "Copy ID"}
                       </button>
                       <button
                         className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
