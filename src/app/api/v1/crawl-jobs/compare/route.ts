@@ -10,6 +10,8 @@ type AuditRow = {
   canonicalUrl: string | null;
   metaDesc: string | null;
   wordCount: number;
+  h1Text: string | null;
+  h1Count: number;
 };
 
 function normStr(v: string | null | undefined) {
@@ -64,6 +66,8 @@ export async function GET(req: Request) {
     canonicalUrl: true,
     metaDesc: true,
     wordCount: true,
+    h1Text: true,
+    h1Count: true,
   } as const;
 
   const [auditsA, auditsB] = await Promise.all([
@@ -95,6 +99,10 @@ export async function GET(req: Request) {
         meta_description_b: normStr(rb.metaDesc),
         word_count_a: "",
         word_count_b: rb.wordCount,
+        h1_text_a: "",
+        h1_text_b: normStr(rb.h1Text),
+        h1_count_a: "",
+        h1_count_b: rb.h1Count,
       });
     }
   }
@@ -117,6 +125,10 @@ export async function GET(req: Request) {
         meta_description_b: "",
         word_count_a: ra.wordCount,
         word_count_b: "",
+        h1_text_a: normStr(ra.h1Text),
+        h1_text_b: "",
+        h1_count_a: ra.h1Count,
+        h1_count_b: "",
       });
     }
   }
@@ -129,7 +141,9 @@ export async function GET(req: Request) {
     const canDiff = normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
     const metaDiff = normStr(ra.metaDesc) !== normStr(rb.metaDesc);
     const wordDiff = ra.wordCount !== rb.wordCount;
-    if (!statusDiff && !titleDiff && !canDiff && !metaDiff && !wordDiff) continue;
+    const h1TextDiff = normStr(ra.h1Text) !== normStr(rb.h1Text);
+    const h1CountDiff = ra.h1Count !== rb.h1Count;
+    if (!statusDiff && !titleDiff && !canDiff && !metaDiff && !wordDiff && !h1TextDiff && !h1CountDiff) continue;
 
     const fields: string[] = [];
     if (statusDiff) fields.push("status");
@@ -137,6 +151,8 @@ export async function GET(req: Request) {
     if (canDiff) fields.push("canonical");
     if (metaDiff) fields.push("meta_description");
     if (wordDiff) fields.push("word_count");
+    if (h1TextDiff) fields.push("h1_text");
+    if (h1CountDiff) fields.push("h1_count");
 
     rows.push({
       change_kind: "changed",
@@ -154,6 +170,10 @@ export async function GET(req: Request) {
       meta_description_b: normStr(rb.metaDesc),
       word_count_a: ra.wordCount,
       word_count_b: rb.wordCount,
+      h1_text_a: normStr(ra.h1Text),
+      h1_text_b: normStr(rb.h1Text),
+      h1_count_a: ra.h1Count,
+      h1_count_b: rb.h1Count,
     });
   }
 
@@ -192,6 +212,10 @@ export async function GET(req: Request) {
     "meta_description_b",
     "word_count_a",
     "word_count_b",
+    "h1_text_a",
+    "h1_text_b",
+    "h1_count_a",
+    "h1_count_b",
   ] as const;
 
   const lines = [headers.join(",")];

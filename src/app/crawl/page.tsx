@@ -684,6 +684,40 @@ export default function CrawlPage() {
     triggerDownload(u);
   }
 
+  async function downloadCompareJson() {
+    if (!compareJobA || !compareJobB) {
+      setError("Choose baseline job (A) and compare job (B).");
+      return;
+    }
+    if (compareJobA === compareJobB) {
+      setError("Pick two different crawl jobs for comparison.");
+      return;
+    }
+    setError(null);
+    const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json`;
+    try {
+      const res = await fetch(u, { cache: "no-store" });
+      if (!res.ok) {
+        const errBody = (await res.json().catch(() => null)) as { message?: string } | null;
+        setError(errBody?.message ?? `Compare JSON failed (${res.status}).`);
+        return;
+      }
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `crawl-compare-${compareJobA.slice(0, 8)}-${compareJobB.slice(0, 8)}.json`;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      setError(describeFetchFailure(e, "Download compare JSON"));
+    }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="w-full px-4 py-8 sm:px-6 lg:px-10 xl:px-12">
@@ -779,7 +813,7 @@ export default function CrawlPage() {
           <p className="mt-2 text-xs text-zinc-500">
             Baseline <span className="font-mono">a</span> is usually the earlier crawl;             <span className="font-mono">b</span> the later. URLs are
             matched by crawl URL hash. Rows: <span className="font-mono">new_in_b</span>, <span className="font-mono">removed_in_a</span>,{" "}
-            <span className="font-mono">changed</span> (status, title, canonical, meta description, word count).
+            <span className="font-mono">changed</span> (status, title, canonical, meta description, word count, H1).
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-xs font-medium text-zinc-700">
@@ -813,18 +847,28 @@ export default function CrawlPage() {
               </select>
             </label>
           </div>
-          <button
-            className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-            onClick={() => downloadCompareCsv()}
-            disabled={!compareJobA || !compareJobB || compareJobA === compareJobB}
-            type="button"
-          >
-            Download compare CSV
-          </button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+              onClick={() => downloadCompareCsv()}
+              disabled={!compareJobA || !compareJobB || compareJobA === compareJobB}
+              type="button"
+            >
+              Download compare CSV
+            </button>
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
+              onClick={() => void downloadCompareJson()}
+              disabled={!compareJobA || !compareJobB || compareJobA === compareJobB}
+              type="button"
+            >
+              Download compare JSON
+            </button>
+          </div>
           <p className="mt-2 text-xs text-zinc-500">
-            JSON:{" "}
+            API:{" "}
             <span className="font-mono text-[11px]">
-              /api/v1/crawl-jobs/compare?a=…&b=…&format=json
+              /api/v1/crawl-jobs/compare?a=…&b=…&format=csv|json
             </span>
           </p>
         </div>
