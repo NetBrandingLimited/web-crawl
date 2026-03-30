@@ -7,6 +7,7 @@ const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
 const DEFAULT_MAX_DEPTH = 10;
 // Keep this close to the "about 500 URLs" target so the crawl doesn't explode.
 const DEFAULT_MAX_PAGES = 600;
+/** Page size for the Discovered URLs table (API allows up to 1000 per request). */
 const URLS_TABLE_LIMIT = 500;
 
 function describeFetchFailure(err: unknown, what: string): string {
@@ -425,6 +426,8 @@ export default function CrawlPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<CrawlJobStatusResponse | null>(null);
   const [urls, setUrls] = useState<CrawlUrlsResponse["items"]>([]);
+  const [urlsNextCursor, setUrlsNextCursor] = useState<string | null>(null);
+  const [urlsLoadingMore, setUrlsLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [crawling, setCrawling] = useState(false);
   const [crawlSteps, setCrawlSteps] = useState(0);
@@ -576,6 +579,7 @@ export default function CrawlPage() {
     setLoading(true);
     setError(null);
     setUrls([]);
+    setUrlsNextCursor(null);
     setStatus(null);
 
     try {
@@ -634,6 +638,24 @@ export default function CrawlPage() {
     if (!res.ok) return;
     const json = (await res.json()) as CrawlUrlsResponse;
     setUrls(json.items);
+    setUrlsNextCursor(json.next_cursor);
+  }
+
+  async function loadMoreUrls() {
+    if (!jobId || !urlsNextCursor || urlsLoadingMore) return;
+    setUrlsLoadingMore(true);
+    try {
+      const res = await fetch(
+        `/api/v1/crawl-jobs/${jobId}/urls?limit=${URLS_TABLE_LIMIT}&cursor=${encodeURIComponent(urlsNextCursor)}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return;
+      const json = (await res.json()) as CrawlUrlsResponse;
+      setUrls((prev) => [...prev, ...json.items]);
+      setUrlsNextCursor(json.next_cursor);
+    } finally {
+      setUrlsLoadingMore(false);
+    }
   }
 
   function triggerDownload(url: string) {
@@ -1143,11 +1165,30 @@ export default function CrawlPage() {
               >
                 Reload
               </button>
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => void loadMoreUrls()}
+                disabled={!jobId || !urlsNextCursor || urlsLoadingMore}
+                type="button"
+              >
+                {urlsLoadingMore ? "Loading…" : "Load more"}
+              </button>
             </div>
           </div>
-          {urls.length > 0 && urlTableFilter.trim() !== "" ? (
+          {urls.length > 0 ? (
             <div className="border-b border-zinc-50 px-6 py-2 text-xs text-zinc-500">
-              Showing {filteredUrls.length} of {urls.length} (table limit {URLS_TABLE_LIMIT})
+              {urlTableFilter.trim() !== "" ? (
+                <>
+                  Showing {filteredUrls.length} of {urls.length} loaded
+                  {reportSummary ? <> (job total {reportSummary.urls} URLs)</> : null}
+                </>
+              ) : (
+                <>
+                  Showing {urls.length} URL{urls.length === 1 ? "" : "s"} loaded
+                  {reportSummary ? <> of {reportSummary.urls} in this job</> : null}
+                  {urlsNextCursor ? <> — more available below.</> : null}
+                </>
+              )}
             </div>
           ) : null}
           <div className="overflow-x-auto">
