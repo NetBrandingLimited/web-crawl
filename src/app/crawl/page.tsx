@@ -626,6 +626,11 @@ export default function CrawlPage() {
     return base;
   }, [filteredJobsDirectory, jobsList, compareJobB]);
 
+  const allFilteredJobsSelected = useMemo(() => {
+    if (filteredJobsDirectory.length === 0) return false;
+    return filteredJobsDirectory.every((j) => selectedJobIds.includes(j.id));
+  }, [filteredJobsDirectory, selectedJobIds]);
+
   const summary = useMemo(() => {
     if (!status) return null;
     return [
@@ -933,13 +938,11 @@ export default function CrawlPage() {
     await refresh(id);
   }
 
-  async function deleteCrawlJobRecord(id: string, seedUrlForConfirm: string, skipConfirm = false) {
-    if (!skipConfirm) {
-      const ok = window.confirm(
-        `Delete this crawl job?\n\n${seedUrlForConfirm}\n\nThis removes its queue rows, page audits, and fetch records from the database. You cannot undo this.`,
-      );
-      if (!ok) return;
-    }
+  async function deleteCrawlJobRecord(id: string, seedUrlForConfirm: string) {
+    const ok = window.confirm(
+      `Delete this crawl job?\n\n${seedUrlForConfirm}\n\nThis removes its queue rows, page audits, and fetch records from the database. You cannot undo this.`,
+    );
+    if (!ok) return;
     setJobDeleteBusy(id);
     setError(null);
     try {
@@ -967,17 +970,62 @@ export default function CrawlPage() {
     }
   }
 
+  function toggleSelectAllFiltered() {
+    const ids = filteredJobsDirectory.map((j) => j.id);
+    if (ids.length === 0) return;
+    setSelectedJobIds((prev) => {
+      const every = ids.every((id) => prev.includes(id));
+      if (every) return prev.filter((id) => !ids.includes(id));
+      return [...new Set([...prev, ...ids])];
+    });
+  }
+
   async function deleteSelectedCrawlJobs() {
     if (selectedJobIds.length === 0) return;
     const ok = window.confirm(
       `Delete ${selectedJobIds.length} selected crawl job(s)?\n\nThis removes their queue rows, page audits, and fetch records. You cannot undo this.`,
     );
     if (!ok) return;
-    for (const id of selectedJobIds) {
-      const job = jobsList.find((j) => j.id === id);
-      await deleteCrawlJobRecord(id, job?.seedUrl ?? id, true);
+    const ids = [...selectedJobIds];
+    setJobDeleteBusy("__batch__");
+    setError(null);
+    try {
+      const res = await fetch("/api/v1/crawl-jobs/delete-batch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        setError(body?.message ?? `Batch delete failed (${res.status}).`);
+        return;
+      }
+      const json = (await res.json()) as { deleted: number; requested: number };
+      if (json.deleted === 0) {
+        setError("No matching crawl jobs were deleted.");
+        return;
+      }
+      const removed = new Set(ids);
+      setJobsList((prev) => prev.filter((j) => !removed.has(j.id)));
+      if (compareJobA && removed.has(compareJobA)) setCompareJobA("");
+      if (compareJobB && removed.has(compareJobB)) setCompareJobB("");
+      if (jobId && removed.has(jobId)) {
+        setJobId(null);
+        setUrls([]);
+        setUrlsNextCursor(null);
+        setStatus(null);
+        setReportSummary(null);
+        setUrlTableFilter("");
+      }
+      setSelectedJobIds([]);
+      if (json.deleted < json.requested) {
+        setError(`Only ${json.deleted} of ${json.requested} jobs were removed (some ids were not found).`);
+      }
+    } catch (e) {
+      setError(describeFetchFailure(e, "Batch delete crawl jobs"));
+    } finally {
+      setJobDeleteBusy(null);
     }
-    setSelectedJobIds([]);
   }
 
   return (
@@ -1200,10 +1248,10 @@ export default function CrawlPage() {
               <button
                 className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
                 onClick={() => void deleteSelectedCrawlJobs()}
-                disabled={jobDeleteBusy !== null || selectedJobIds.length === 0}
+                disabled={jobDeleteBusy !== null || jobsListLoading || selectedJobIds.length === 0}
                 type="button"
               >
-                Delete selected ({selectedJobIds.length})
+                {jobDeleteBusy === "__batch__" ? "Deleting…" : `Delete selected (${selectedJobIds.length})`}
               </button>
             </div>
           </div>
@@ -1213,6 +1261,20 @@ export default function CrawlPage() {
             loads that job into Status, reports, and Discovered URLs above.
           </p>
           {jobsListError ? <div className="mt-2 text-sm text-red-600">{jobsListError}</div> : null}
+          {jobsList.length > 0 && filteredJobsDirectory.length > 0 ? (
+            <div className="mt-2">
+              <button
+                className="text-xs text-zinc-700 underline decoration-zinc-300 underline-offset-2 hover:text-zinc-900 disabled:opacity-50"
+                type="button"
+                disabled={jobDeleteBusy !== null || jobsListLoading}
+                onClick={() => toggleSelectAllFiltered()}
+              >
+                {allFilteredJobsSelected
+                  ? "Clear selection for jobs shown below"
+                  : `Select all jobs shown below (${filteredJobsDirectory.length})`}
+              </button>
+            </div>
+          ) : null}
           <div className="mt-4 max-h-72 overflow-y-auto rounded-lg border border-zinc-100">
             {jobsList.length === 0 ? (
               <div className="px-4 py-6 text-sm text-zinc-500">
@@ -1229,6 +1291,7 @@ export default function CrawlPage() {
                         className="mt-0.5 h-4 w-4 rounded border-zinc-300"
                         type="checkbox"
                         checked={selectedJobIds.includes(j.id)}
+                        disabled={jobDeleteBusy !== null}
                         onChange={(e) =>
                           setSelectedJobIds((prev) =>
                             e.target.checked ? [...prev, j.id] : prev.filter((x) => x !== j.id),
@@ -1248,7 +1311,7 @@ export default function CrawlPage() {
                       <button
                         className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50"
                         type="button"
-                        disabled={jobsListLoading}
+                        disabled={jobsListLoading || jobDeleteBusy !== null}
                         onClick={() => void openJobInViewer(j.id)}
                       >
                         View
