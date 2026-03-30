@@ -8,6 +8,8 @@ type AuditRow = {
   httpStatus: number | null;
   title: string | null;
   canonicalUrl: string | null;
+  metaDesc: string | null;
+  wordCount: number;
 };
 
 function normStr(v: string | null | undefined) {
@@ -60,6 +62,8 @@ export async function GET(req: Request) {
     httpStatus: true,
     title: true,
     canonicalUrl: true,
+    metaDesc: true,
+    wordCount: true,
   } as const;
 
   const [auditsA, auditsB] = await Promise.all([
@@ -87,6 +91,10 @@ export async function GET(req: Request) {
         title_b: normStr(rb.title),
         canonical_a: "",
         canonical_b: normStr(rb.canonicalUrl),
+        meta_description_a: "",
+        meta_description_b: normStr(rb.metaDesc),
+        word_count_a: "",
+        word_count_b: rb.wordCount,
       });
     }
   }
@@ -105,6 +113,10 @@ export async function GET(req: Request) {
         title_b: "",
         canonical_a: normStr(ra.canonicalUrl),
         canonical_b: "",
+        meta_description_a: normStr(ra.metaDesc),
+        meta_description_b: "",
+        word_count_a: ra.wordCount,
+        word_count_b: "",
       });
     }
   }
@@ -115,12 +127,16 @@ export async function GET(req: Request) {
     const statusDiff = ra.httpStatus !== rb.httpStatus;
     const titleDiff = normStr(ra.title) !== normStr(rb.title);
     const canDiff = normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
-    if (!statusDiff && !titleDiff && !canDiff) continue;
+    const metaDiff = normStr(ra.metaDesc) !== normStr(rb.metaDesc);
+    const wordDiff = ra.wordCount !== rb.wordCount;
+    if (!statusDiff && !titleDiff && !canDiff && !metaDiff && !wordDiff) continue;
 
     const fields: string[] = [];
     if (statusDiff) fields.push("status");
     if (titleDiff) fields.push("title");
     if (canDiff) fields.push("canonical");
+    if (metaDiff) fields.push("meta_description");
+    if (wordDiff) fields.push("word_count");
 
     rows.push({
       change_kind: "changed",
@@ -134,6 +150,10 @@ export async function GET(req: Request) {
       title_b: normStr(rb.title),
       canonical_a: normStr(ra.canonicalUrl),
       canonical_b: normStr(rb.canonicalUrl),
+      meta_description_a: normStr(ra.metaDesc),
+      meta_description_b: normStr(rb.metaDesc),
+      word_count_a: ra.wordCount,
+      word_count_b: rb.wordCount,
     });
   }
 
@@ -168,6 +188,10 @@ export async function GET(req: Request) {
     "title_b",
     "canonical_a",
     "canonical_b",
+    "meta_description_a",
+    "meta_description_b",
+    "word_count_a",
+    "word_count_b",
   ] as const;
 
   const lines = [headers.join(",")];

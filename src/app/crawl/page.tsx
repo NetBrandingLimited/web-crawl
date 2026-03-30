@@ -606,7 +606,8 @@ export default function CrawlPage() {
       const zip = new JSZip();
       const csvFolder = zip.folder("csv");
       const xmlFolder = zip.folder("xml");
-      if (!csvFolder || !xmlFolder) throw new Error("Could not create csv/ or xml/ in ZIP");
+      const jsonFolder = zip.folder("json");
+      if (!csvFolder || !xmlFolder || !jsonFolder) throw new Error("Could not create csv/, xml/, or json/ in ZIP");
 
       const entries: Array<{ folder: typeof csvFolder; name: string; url: string }> = REPORT_BUTTONS.map(
         (r) => ({
@@ -619,6 +620,11 @@ export default function CrawlPage() {
         folder: xmlFolder,
         name: "sitemap.xml",
         url: `/api/v1/crawl-jobs/${jobId}/sitemap`,
+      });
+      entries.push({
+        folder: jsonFolder,
+        name: "summary.json",
+        url: `/api/v1/crawl-jobs/${jobId}/reports?report=summary`,
       });
 
       const concurrency = 6;
@@ -635,8 +641,13 @@ export default function CrawlPage() {
                 `${e.name}: HTTP ${res.status}${t ? ` — ${t.slice(0, 120)}` : ""}`,
               );
             }
-            const buf = await res.arrayBuffer();
-            e.folder.file(e.name, buf);
+            if (e.name === "summary.json") {
+              const data = (await res.json()) as unknown;
+              e.folder.file(e.name, JSON.stringify(data, null, 2));
+            } else {
+              const buf = await res.arrayBuffer();
+              e.folder.file(e.name, buf);
+            }
           }),
         );
       }
@@ -766,9 +777,9 @@ export default function CrawlPage() {
             </button>
           </div>
           <p className="mt-2 text-xs text-zinc-500">
-            Baseline <span className="font-mono">a</span> is usually the earlier crawl; <span className="font-mono">b</span> the later. URLs are
+            Baseline <span className="font-mono">a</span> is usually the earlier crawl;             <span className="font-mono">b</span> the later. URLs are
             matched by crawl URL hash. Rows: <span className="font-mono">new_in_b</span>, <span className="font-mono">removed_in_a</span>,{" "}
-            <span className="font-mono">changed</span> (status / title / canonical).
+            <span className="font-mono">changed</span> (status, title, canonical, meta description, word count).
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-xs font-medium text-zinc-700">
@@ -833,8 +844,9 @@ export default function CrawlPage() {
               {bulkZipBusy ? (bulkZipProgress ?? "Working…") : "Download all CSV + XML (ZIP)"}
             </button>
             <p className="mt-1 text-xs text-zinc-500">
-              One ZIP: folder <span className="font-mono">csv/</span> ({REPORT_BUTTONS.length} files) and{" "}
-              <span className="font-mono">xml/sitemap.xml</span>. May take a minute on large jobs.
+              One ZIP: <span className="font-mono">csv/</span> ({REPORT_BUTTONS.length} files),{" "}
+              <span className="font-mono">xml/sitemap.xml</span>, and{" "}
+              <span className="font-mono">json/summary.json</span>. May take a minute on large jobs.
             </p>
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
               {REPORT_BUTTONS.map((report) => (
