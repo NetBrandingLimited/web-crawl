@@ -12,6 +12,9 @@ type AuditRow = {
   wordCount: number;
   h1Text: string | null;
   h1Count: number;
+  contentType: string | null;
+  robotsMeta: string | null;
+  metaRefreshContent: string | null;
 };
 
 function normStr(v: string | null | undefined) {
@@ -68,6 +71,9 @@ export async function GET(req: Request) {
     wordCount: true,
     h1Text: true,
     h1Count: true,
+    contentType: true,
+    robotsMeta: true,
+    metaRefreshContent: true,
   } as const;
 
   const [auditsA, auditsB] = await Promise.all([
@@ -103,6 +109,12 @@ export async function GET(req: Request) {
         h1_text_b: normStr(rb.h1Text),
         h1_count_a: "",
         h1_count_b: rb.h1Count,
+        content_type_a: "",
+        content_type_b: normStr(rb.contentType),
+        robots_meta_a: "",
+        robots_meta_b: normStr(rb.robotsMeta),
+        meta_refresh_a: "",
+        meta_refresh_b: normStr(rb.metaRefreshContent),
       });
     }
   }
@@ -129,6 +141,12 @@ export async function GET(req: Request) {
         h1_text_b: "",
         h1_count_a: ra.h1Count,
         h1_count_b: "",
+        content_type_a: normStr(ra.contentType),
+        content_type_b: "",
+        robots_meta_a: normStr(ra.robotsMeta),
+        robots_meta_b: "",
+        meta_refresh_a: normStr(ra.metaRefreshContent),
+        meta_refresh_b: "",
       });
     }
   }
@@ -143,7 +161,22 @@ export async function GET(req: Request) {
     const wordDiff = ra.wordCount !== rb.wordCount;
     const h1TextDiff = normStr(ra.h1Text) !== normStr(rb.h1Text);
     const h1CountDiff = ra.h1Count !== rb.h1Count;
-    if (!statusDiff && !titleDiff && !canDiff && !metaDiff && !wordDiff && !h1TextDiff && !h1CountDiff) continue;
+    const contentTypeDiff = normStr(ra.contentType) !== normStr(rb.contentType);
+    const robotsDiff = normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
+    const metaRefreshDiff = normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
+    if (
+      !statusDiff &&
+      !titleDiff &&
+      !canDiff &&
+      !metaDiff &&
+      !wordDiff &&
+      !h1TextDiff &&
+      !h1CountDiff &&
+      !contentTypeDiff &&
+      !robotsDiff &&
+      !metaRefreshDiff
+    )
+      continue;
 
     const fields: string[] = [];
     if (statusDiff) fields.push("status");
@@ -153,6 +186,9 @@ export async function GET(req: Request) {
     if (wordDiff) fields.push("word_count");
     if (h1TextDiff) fields.push("h1_text");
     if (h1CountDiff) fields.push("h1_count");
+    if (contentTypeDiff) fields.push("content_type");
+    if (robotsDiff) fields.push("robots_meta");
+    if (metaRefreshDiff) fields.push("meta_refresh");
 
     rows.push({
       change_kind: "changed",
@@ -174,6 +210,12 @@ export async function GET(req: Request) {
       h1_text_b: normStr(rb.h1Text),
       h1_count_a: ra.h1Count,
       h1_count_b: rb.h1Count,
+      content_type_a: normStr(ra.contentType),
+      content_type_b: normStr(rb.contentType),
+      robots_meta_a: normStr(ra.robotsMeta),
+      robots_meta_b: normStr(rb.robotsMeta),
+      meta_refresh_a: normStr(ra.metaRefreshContent),
+      meta_refresh_b: normStr(rb.metaRefreshContent),
     });
   }
 
@@ -216,6 +258,12 @@ export async function GET(req: Request) {
     "h1_text_b",
     "h1_count_a",
     "h1_count_b",
+    "content_type_a",
+    "content_type_b",
+    "robots_meta_a",
+    "robots_meta_b",
+    "meta_refresh_a",
+    "meta_refresh_b",
   ] as const;
 
   const lines = [headers.join(",")];

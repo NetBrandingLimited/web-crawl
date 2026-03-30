@@ -47,6 +47,12 @@ type CrawlJobListItem = {
   createdAt: string;
 };
 
+type CompareDiffCounts = {
+  new_in_b: number;
+  removed_in_a: number;
+  changed: number;
+};
+
 type CrawlUrlsResponse = {
   items: Array<{
     id: string;
@@ -426,6 +432,10 @@ export default function CrawlPage() {
   const [jobsList, setJobsList] = useState<CrawlJobListItem[]>([]);
   const [compareJobA, setCompareJobA] = useState<string>("");
   const [compareJobB, setCompareJobB] = useState<string>("");
+  const [compareDiffPreview, setCompareDiffPreview] = useState<{
+    loading: boolean;
+    counts: CompareDiffCounts | null;
+  } | null>(null);
 
   const loadJobListForCompare = useCallback(async () => {
     try {
@@ -445,6 +455,42 @@ export default function CrawlPage() {
   useEffect(() => {
     if (jobId) setCompareJobB((prev) => prev || jobId);
   }, [jobId]);
+
+  useEffect(() => {
+    if (!compareJobA || !compareJobB || compareJobA === compareJobB) {
+      setCompareDiffPreview(null);
+      return;
+    }
+    const ac = new AbortController();
+    setCompareDiffPreview({ loading: true, counts: null });
+    const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json`;
+    void (async () => {
+      try {
+        const res = await fetch(u, { cache: "no-store", signal: ac.signal });
+        if (!res.ok) {
+          if (!ac.signal.aborted) setCompareDiffPreview(null);
+          return;
+        }
+        const json = (await res.json()) as { counts?: CompareDiffCounts };
+        const c = json.counts;
+        if (ac.signal.aborted) return;
+        if (
+          c &&
+          typeof c.new_in_b === "number" &&
+          typeof c.removed_in_a === "number" &&
+          typeof c.changed === "number"
+        ) {
+          setCompareDiffPreview({ loading: false, counts: c });
+        } else {
+          setCompareDiffPreview(null);
+        }
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return;
+        if (!ac.signal.aborted) setCompareDiffPreview(null);
+      }
+    })();
+    return () => ac.abort();
+  }, [compareJobA, compareJobB]);
 
   const summary = useMemo(() => {
     if (!status) return null;
@@ -811,9 +857,9 @@ export default function CrawlPage() {
             </button>
           </div>
           <p className="mt-2 text-xs text-zinc-500">
-            Baseline <span className="font-mono">a</span> is usually the earlier crawl;             <span className="font-mono">b</span> the later. URLs are
-            matched by crawl URL hash. Rows: <span className="font-mono">new_in_b</span>, <span className="font-mono">removed_in_a</span>,{" "}
-            <span className="font-mono">changed</span> (status, title, canonical, meta description, word count, H1).
+            Baseline <span className="font-mono">a</span> is usually the earlier crawl; <span className="font-mono">b</span> the later. URLs are matched by
+            crawl URL hash. Rows: <span className="font-mono">new_in_b</span>, <span className="font-mono">removed_in_a</span>,{" "}
+            <span className="font-mono">changed</span> (status, title, canonical, meta, word count, H1, content-type, robots meta, meta refresh).
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-xs font-medium text-zinc-700">
@@ -847,6 +893,18 @@ export default function CrawlPage() {
               </select>
             </label>
           </div>
+          {compareDiffPreview && (compareDiffPreview.loading || compareDiffPreview.counts) ? (
+            <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
+              {compareDiffPreview.loading ? (
+                <span className="text-zinc-500">Computing diff…</span>
+              ) : compareDiffPreview.counts ? (
+                <>
+                  <span className="font-medium">Diff summary:</span> {compareDiffPreview.counts.new_in_b} new in B,{" "}
+                  {compareDiffPreview.counts.removed_in_a} removed since A, {compareDiffPreview.counts.changed} changed on same URLs
+                </>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               className="inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
