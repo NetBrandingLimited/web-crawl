@@ -32,6 +32,20 @@ const createCrawlJobSchema = z
     path: ["domain"],
   });
 
+export async function GET() {
+  const items = await prisma.crawlJob.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      seedUrl: true,
+      status: true,
+      createdAt: true,
+    },
+  });
+  return NextResponse.json({ items });
+}
+
 export async function POST(req: Request) {
   const parsed = createCrawlJobSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {

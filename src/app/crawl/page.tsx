@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const WORKER_STEPS_CAP = 4000;
 const DEFAULT_MAX_DEPTH = 10;
@@ -38,6 +38,13 @@ type CrawlJobStatusResponse = {
     failed: number;
     disallowed: number;
   };
+};
+
+type CrawlJobListItem = {
+  id: string;
+  seedUrl: string;
+  status: string;
+  createdAt: string;
 };
 
 type CrawlUrlsResponse = {
@@ -416,6 +423,28 @@ export default function CrawlPage() {
   const [error, setError] = useState<string | null>(null);
   const [bulkZipBusy, setBulkZipBusy] = useState(false);
   const [bulkZipProgress, setBulkZipProgress] = useState<string | null>(null);
+  const [jobsList, setJobsList] = useState<CrawlJobListItem[]>([]);
+  const [compareJobA, setCompareJobA] = useState<string>("");
+  const [compareJobB, setCompareJobB] = useState<string>("");
+
+  const loadJobListForCompare = useCallback(async () => {
+    try {
+      const res = await fetch("/api/v1/crawl-jobs", { cache: "no-store" });
+      if (!res.ok) return;
+      const json = (await res.json()) as { items: CrawlJobListItem[] };
+      setJobsList(json.items ?? []);
+    } catch {
+      /* ignore list failure */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadJobListForCompare();
+  }, [loadJobListForCompare]);
+
+  useEffect(() => {
+    if (jobId) setCompareJobB((prev) => prev || jobId);
+  }, [jobId]);
 
   const summary = useMemo(() => {
     if (!status) return null;
@@ -496,6 +525,7 @@ export default function CrawlPage() {
       setError(describeFetchFailure(e, "Start crawl"));
     } finally {
       setLoading(false);
+      void loadJobListForCompare();
     }
   }
 
@@ -630,6 +660,19 @@ export default function CrawlPage() {
     }
   }
 
+  function downloadCompareCsv() {
+    if (!compareJobA || !compareJobB) {
+      setError("Choose baseline job (A) and compare job (B).");
+      return;
+    }
+    if (compareJobA === compareJobB) {
+      setError("Pick two different crawl jobs for comparison.");
+      return;
+    }
+    const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=csv`;
+    triggerDownload(u);
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="w-full px-4 py-8 sm:px-6 lg:px-10 xl:px-12">
@@ -709,6 +752,70 @@ export default function CrawlPage() {
               <div className="mt-4 text-sm text-zinc-500">No status loaded.</div>
             )}
           </div>
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm font-medium">Phase 2 — Compare crawls</div>
+            <button
+              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50"
+              onClick={() => void loadJobListForCompare()}
+              type="button"
+            >
+              Reload job list
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">
+            Baseline <span className="font-mono">a</span> is usually the earlier crawl; <span className="font-mono">b</span> the later. URLs are
+            matched by crawl URL hash. Rows: <span className="font-mono">new_in_b</span>, <span className="font-mono">removed_in_a</span>,{" "}
+            <span className="font-mono">changed</span> (status / title / canonical).
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="block text-xs font-medium text-zinc-700">
+              Baseline crawl (A)
+              <select
+                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+                value={compareJobA}
+                onChange={(e) => setCompareJobA(e.target.value)}
+              >
+                <option value="">Select job…</option>
+                {jobsList.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.seedUrl} — {j.status} ({new Date(j.createdAt).toLocaleString()})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-medium text-zinc-700">
+              Compare crawl (B)
+              <select
+                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+                value={compareJobB}
+                onChange={(e) => setCompareJobB(e.target.value)}
+              >
+                <option value="">Select job…</option>
+                {jobsList.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.seedUrl} — {j.status} ({new Date(j.createdAt).toLocaleString()})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <button
+            className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+            onClick={() => downloadCompareCsv()}
+            disabled={!compareJobA || !compareJobB || compareJobA === compareJobB}
+            type="button"
+          >
+            Download compare CSV
+          </button>
+          <p className="mt-2 text-xs text-zinc-500">
+            JSON:{" "}
+            <span className="font-mono text-[11px]">
+              /api/v1/crawl-jobs/compare?a=…&b=…&format=json
+            </span>
+          </p>
         </div>
 
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white shadow-sm">
