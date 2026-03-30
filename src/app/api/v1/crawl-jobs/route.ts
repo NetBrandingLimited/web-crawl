@@ -32,10 +32,14 @@ const createCrawlJobSchema = z
     path: ["domain"],
   });
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const raw = Number(searchParams.get("limit") ?? "200");
+  const limit = Math.min(500, Math.max(1, Number.isFinite(raw) ? Math.floor(raw) : 200));
+
   const items = await prisma.crawlJob.findMany({
     orderBy: { createdAt: "desc" },
-    take: 100,
+    take: limit,
     select: {
       id: true,
       seedUrl: true,

@@ -9,6 +9,8 @@ const DEFAULT_MAX_DEPTH = 10;
 const DEFAULT_MAX_PAGES = 600;
 /** Page size for the Discovered URLs table (API allows up to 1000 per request). */
 const URLS_TABLE_LIMIT = 500;
+/** Past jobs / compare dropdowns: server allows up to 500 (see GET /api/v1/crawl-jobs). */
+const JOB_LIST_LIMIT = 500;
 
 function describeFetchFailure(err: unknown, what: string): string {
   const msg = err instanceof Error ? err.message : String(err);
@@ -443,17 +445,31 @@ export default function CrawlPage() {
     counts: CompareDiffCounts | null;
   } | null>(null);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
+  const applyingCompareFromUrl = useRef(false);
   const [urlTableFilter, setUrlTableFilter] = useState("");
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
+  const [jobsListLoading, setJobsListLoading] = useState(false);
+  const [jobsListError, setJobsListError] = useState<string | null>(null);
 
   const loadJobListForCompare = useCallback(async () => {
+    setJobsListLoading(true);
+    setJobsListError(null);
     try {
-      const res = await fetch("/api/v1/crawl-jobs", { cache: "no-store" });
-      if (!res.ok) return;
-      const json = (await res.json()) as { items: CrawlJobListItem[] };
-      setJobsList(json.items ?? []);
-    } catch {
-      /* ignore list failure */
+      const res = await fetch(`/api/v1/crawl-jobs?limit=${JOB_LIST_LIMIT}`, { cache: "no-store" });
+      if (!res.ok) {
+        const detail = (await res.text().catch(() => "")).trim();
+        setJobsListError(
+          `Could not load job list (HTTP ${res.status}).${detail ? ` ${detail.slice(0, 240)}` : ""}`,
+        );
+        return;
+      }
+      const json = (await res.json()) as { items?: unknown };
+      const items = Array.isArray(json.items) ? (json.items as CrawlJobListItem[]) : [];
+      setJobsList(items);
+    } catch (e) {
+      setJobsListError(describeFetchFailure(e, "Load job list"));
+    } finally {
+      setJobsListLoading(false);
     }
   }, []);
 
@@ -464,6 +480,52 @@ export default function CrawlPage() {
   useEffect(() => {
     if (jobId) setCompareJobB((prev) => prev || jobId);
   }, [jobId]);
+
+  /** Drop compare selections that no longer exist in the loaded job list. */
+  useEffect(() => {
+    if (jobsList.length === 0) return;
+    const ids = new Set(jobsList.map((j) => j.id));
+    setCompareJobA((p) => (p && !ids.has(p) ? "" : p));
+    setCompareJobB((p) => (p && !ids.has(p) ? "" : p));
+  }, [jobsList]);
+
+  /** Apply compareA/compareB from the URL once the job list is available (does not wipe URL while list is still empty). */
+  useEffect(() => {
+    if (jobsList.length === 0) return;
+    const url = new URL(window.location.href);
+    const a = url.searchParams.get("compareA") ?? url.searchParams.get("a");
+    const b = url.searchParams.get("compareB") ?? url.searchParams.get("b");
+    if (!a || !b || a === b) return;
+    const ids = new Set(jobsList.map((j) => j.id));
+    if (!ids.has(a) || !ids.has(b)) return;
+    applyingCompareFromUrl.current = true;
+    setCompareJobA(a);
+    setCompareJobB(b);
+  }, [jobsList]);
+
+  useEffect(() => {
+    if (applyingCompareFromUrl.current) {
+      applyingCompareFromUrl.current = false;
+      return;
+    }
+    // Avoid stripping compare* from the URL before the job list has loaded (would break bookmarked links).
+    if (!compareJobA && !compareJobB && jobsList.length === 0) return;
+
+    const url = new URL(window.location.href);
+    if (compareJobA && compareJobB && compareJobA !== compareJobB) {
+      url.searchParams.set("compareA", compareJobA);
+      url.searchParams.set("compareB", compareJobB);
+    } else {
+      url.searchParams.delete("compareA");
+      url.searchParams.delete("compareB");
+      url.searchParams.delete("a");
+      url.searchParams.delete("b");
+    }
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      window.history.replaceState({}, "", next);
+    }
+  }, [compareJobA, compareJobB, jobsList.length]);
 
   useEffect(() => {
     if (!compareJobA || !compareJobB || compareJobA === compareJobB) {
@@ -943,11 +1005,12 @@ export default function CrawlPage() {
             <div className="text-sm font-medium">Phase 2 — Compare crawls</div>
             <div className="flex flex-wrap gap-2">
               <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50"
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
                 onClick={() => void loadJobListForCompare()}
+                disabled={jobsListLoading}
                 type="button"
               >
-                Reload job list
+                {jobsListLoading ? "Loading…" : "Reload job list"}
               </button>
               <button
                 className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
@@ -963,8 +1026,13 @@ export default function CrawlPage() {
             Baseline <span className="font-mono">a</span> is usually the earlier crawl; <span className="font-mono">b</span> the later. URLs are matched by
             crawl URL hash. Rows: <span className="font-mono">new_in_b</span>, <span className="font-mono">removed_in_a</span>,{" "}
             <span className="font-mono">changed</span> (status, title, canonical, meta, word count, H1, content-type, robots meta, meta refresh, body
-            hash, X-Robots-Tag).
+            hash, X-Robots-Tag). With two jobs selected, this page updates the URL with{" "}
+            <span className="font-mono">compareA</span> / <span className="font-mono">compareB</span> so you can bookmark or share the pair.
           </p>
+          {jobsListError ? <div className="mt-2 text-sm text-red-600">{jobsListError}</div> : null}
+          {!jobsListError && !jobsListLoading && jobsList.length === 0 ? (
+            <div className="mt-2 text-xs text-zinc-500">No crawl jobs returned. Start a crawl above, or check the database connection.</div>
+          ) : null}
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block text-xs font-medium text-zinc-700">
               Baseline crawl (A)
@@ -1041,20 +1109,24 @@ export default function CrawlPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm font-medium">Past crawl jobs</div>
             <button
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50"
+              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
               onClick={() => void loadJobListForCompare()}
+              disabled={jobsListLoading}
               type="button"
             >
-              Reload list
+              {jobsListLoading ? "Loading…" : "Reload list"}
             </button>
           </div>
           <p className="mt-2 text-xs text-zinc-500">
-            Remove individual jobs from the database (queue, audits, fetches for that job). The list matches the newest 100 jobs; compare dropdowns use
-            the same list.
+            Remove individual jobs from the database (queue, audits, fetches for that job). The list matches the newest {JOB_LIST_LIMIT} jobs; compare
+            dropdowns use the same list.
           </p>
+          {jobsListError ? <div className="mt-2 text-sm text-red-600">{jobsListError}</div> : null}
           <div className="mt-4 max-h-72 overflow-y-auto rounded-lg border border-zinc-100">
             {jobsList.length === 0 ? (
-              <div className="px-4 py-6 text-sm text-zinc-500">No jobs loaded. Use Reload list or start a crawl.</div>
+              <div className="px-4 py-6 text-sm text-zinc-500">
+                {jobsListLoading ? "Loading jobs…" : "No jobs loaded. Use Reload list or start a crawl."}
+              </div>
             ) : (
               <ul className="divide-y divide-zinc-100 text-sm">
                 {jobsList.map((j) => (
