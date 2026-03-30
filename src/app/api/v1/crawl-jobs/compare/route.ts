@@ -17,6 +17,8 @@ type AuditRow = {
   metaRefreshContent: string | null;
   contentHash: string | null;
   xRobotsTag: string | null;
+  htmlLang: string | null;
+  responseTimeMs: number | null;
 };
 
 function normStr(v: string | null | undefined) {
@@ -78,6 +80,8 @@ export async function GET(req: Request) {
     metaRefreshContent: true,
     contentHash: true,
     xRobotsTag: true,
+    htmlLang: true,
+    responseTimeMs: true,
   } as const;
 
   const [auditsA, auditsB] = await Promise.all([
@@ -123,6 +127,10 @@ export async function GET(req: Request) {
         content_hash_b: normStr(rb.contentHash),
         x_robots_tag_a: "",
         x_robots_tag_b: normStr(rb.xRobotsTag),
+        html_lang_a: "",
+        html_lang_b: normStr(rb.htmlLang),
+        response_time_ms_a: "",
+        response_time_ms_b: rb.responseTimeMs ?? "",
       });
     }
   }
@@ -159,6 +167,10 @@ export async function GET(req: Request) {
         content_hash_b: "",
         x_robots_tag_a: normStr(ra.xRobotsTag),
         x_robots_tag_b: "",
+        html_lang_a: normStr(ra.htmlLang),
+        html_lang_b: "",
+        response_time_ms_a: ra.responseTimeMs ?? "",
+        response_time_ms_b: "",
       });
     }
   }
@@ -178,6 +190,8 @@ export async function GET(req: Request) {
     const metaRefreshDiff = normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
     const contentHashDiff = normStr(ra.contentHash) !== normStr(rb.contentHash);
     const xRobotsDiff = normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
+    const htmlLangDiff = normStr(ra.htmlLang) !== normStr(rb.htmlLang);
+    const responseTimeDiff = ra.responseTimeMs !== rb.responseTimeMs;
     if (
       !statusDiff &&
       !titleDiff &&
@@ -190,7 +204,9 @@ export async function GET(req: Request) {
       !robotsDiff &&
       !metaRefreshDiff &&
       !contentHashDiff &&
-      !xRobotsDiff
+      !xRobotsDiff &&
+      !htmlLangDiff &&
+      !responseTimeDiff
     )
       continue;
 
@@ -207,6 +223,8 @@ export async function GET(req: Request) {
     if (metaRefreshDiff) fields.push("meta_refresh");
     if (contentHashDiff) fields.push("content_hash");
     if (xRobotsDiff) fields.push("x_robots_tag");
+    if (htmlLangDiff) fields.push("html_lang");
+    if (responseTimeDiff) fields.push("response_time_ms");
 
     rows.push({
       change_kind: "changed",
@@ -238,6 +256,10 @@ export async function GET(req: Request) {
       content_hash_b: normStr(rb.contentHash),
       x_robots_tag_a: normStr(ra.xRobotsTag),
       x_robots_tag_b: normStr(rb.xRobotsTag),
+      html_lang_a: normStr(ra.htmlLang),
+      html_lang_b: normStr(rb.htmlLang),
+      response_time_ms_a: ra.responseTimeMs ?? "",
+      response_time_ms_b: rb.responseTimeMs ?? "",
     });
   }
 
@@ -292,6 +314,10 @@ export async function GET(req: Request) {
     "content_hash_b",
     "x_robots_tag_a",
     "x_robots_tag_b",
+    "html_lang_a",
+    "html_lang_b",
+    "response_time_ms_a",
+    "response_time_ms_b",
   ] as const;
 
   const lines = [headers.join(",")];

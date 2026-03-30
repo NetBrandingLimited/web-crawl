@@ -1187,7 +1187,7 @@ export default function CrawlPage() {
             Baseline <span className="font-mono">a</span> is usually the earlier crawl; <span className="font-mono">b</span> the later. URLs are matched by
             crawl URL hash. Rows: <span className="font-mono">new_in_b</span>, <span className="font-mono">removed_in_a</span>,{" "}
             <span className="font-mono">changed</span> (status, title, canonical, meta, word count, H1, content-type, robots meta, meta refresh, body
-            hash, X-Robots-Tag). With two jobs selected, this page updates the URL with{" "}
+            hash, X-Robots-Tag, HTML <span className="font-mono">lang</span>, response time). With two jobs selected, this page updates the URL with{" "}
             <span className="font-mono">compareA</span> / <span className="font-mono">compareB</span> so you can bookmark or share the pair.
           </p>
           {jobsListError ? <div className="mt-2 text-sm text-red-600">{jobsListError}</div> : null}
