@@ -52,6 +52,8 @@ type CompareDiffCounts = {
   new_in_b: number;
   removed_in_a: number;
   changed: number;
+  pages_in_a: number;
+  pages_in_b: number;
 };
 
 type CrawlUrlsResponse = {
@@ -485,7 +487,9 @@ export default function CrawlPage() {
             c &&
             typeof c.new_in_b === "number" &&
             typeof c.removed_in_a === "number" &&
-            typeof c.changed === "number"
+            typeof c.changed === "number" &&
+            typeof c.pages_in_a === "number" &&
+            typeof c.pages_in_b === "number"
           ) {
             setCompareDiffPreview({ loading: false, counts: c });
           } else {
@@ -912,8 +916,10 @@ export default function CrawlPage() {
                 <span className="text-zinc-500">Computing diff…</span>
               ) : compareDiffPreview.counts ? (
                 <>
+                  <span className="font-medium">Crawl size:</span> A has {compareDiffPreview.counts.pages_in_a} audited URLs, B has{" "}
+                  {compareDiffPreview.counts.pages_in_b}.{" "}
                   <span className="font-medium">Diff summary:</span> {compareDiffPreview.counts.new_in_b} new in B,{" "}
-                  {compareDiffPreview.counts.removed_in_a} removed since A, {compareDiffPreview.counts.changed} changed on same URLs
+                  {compareDiffPreview.counts.removed_in_a} removed since A, {compareDiffPreview.counts.changed} changed on same URLs.
                 </>
               ) : null}
             </div>

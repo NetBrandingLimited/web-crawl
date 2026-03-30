@@ -255,6 +255,8 @@ export async function GET(req: Request) {
         new_in_b: rows.filter((r) => r.change_kind === "new_in_b").length,
         removed_in_a: rows.filter((r) => r.change_kind === "removed_in_a").length,
         changed: rows.filter((r) => r.change_kind === "changed").length,
+        pages_in_a: auditsA.length,
+        pages_in_b: auditsB.length,
       },
       rows,
     });
