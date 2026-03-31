@@ -987,6 +987,17 @@ export default function CrawlPage() {
     return rows;
   }, [filteredCompareRows, compareSortDir, compareSortKey]);
   const visibleSortedCompareRows = useMemo(() => sortedFilteredCompareRows.slice(0, 200), [sortedFilteredCompareRows]);
+  const filteredCompareKindCounts = useMemo(() => {
+    let changed = 0;
+    let newInB = 0;
+    let removedInA = 0;
+    for (const r of filteredCompareRows) {
+      if (r.change_kind === "changed") changed += 1;
+      else if (r.change_kind === "new_in_b") newInB += 1;
+      else if (r.change_kind === "removed_in_a") removedInA += 1;
+    }
+    return { changed, newInB, removedInA };
+  }, [filteredCompareRows]);
 
   const loadMoreCompareDiffs = useCallback(() => {
     if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
@@ -2015,6 +2026,15 @@ export default function CrawlPage() {
                   Status changes only
                 </label>
                 <span className="text-xs text-zinc-500">{filteredCompareRows.length} row(s)</span>
+                <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] text-zinc-600">
+                  changed: {filteredCompareKindCounts.changed}
+                </span>
+                <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] text-zinc-600">
+                  new_in_b: {filteredCompareKindCounts.newInB}
+                </span>
+                <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] text-zinc-600">
+                  removed_in_a: {filteredCompareKindCounts.removedInA}
+                </span>
                 <button
                   type="button"
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
