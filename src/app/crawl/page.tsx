@@ -459,6 +459,7 @@ export default function CrawlPage() {
   const [jobsListLoadingMore, setJobsListLoadingMore] = useState(false);
   const [jobsListNextCursor, setJobsListNextCursor] = useState<string | null>(null);
   const [jobsListError, setJobsListError] = useState<string | null>(null);
+  const [compareUrlHydrationNotice, setCompareUrlHydrationNotice] = useState<string | null>(null);
   const [jobDirectoryFilter, setJobDirectoryFilter] = useState("");
   const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
   const [openJobByIdInput, setOpenJobByIdInput] = useState("");
@@ -554,6 +555,7 @@ export default function CrawlPage() {
     const b = url.searchParams.get("compareB") ?? url.searchParams.get("b");
     if (!a || !b || a === b) return;
     pendingCompareFromUrlRef.current = { a, b };
+    setCompareUrlHydrationNotice(null);
   }, []);
 
   /** Apply compareA/compareB from the URL; auto-page older jobs until both IDs are found (or exhausted). */
@@ -571,6 +573,9 @@ export default function CrawlPage() {
       }
       if (!jobsListNextCursor) {
         pendingCompareFromUrlRef.current = null;
+        setCompareUrlHydrationNotice(
+          "Could not resolve compareA/compareB from URL in loaded job history. The jobs may be deleted or the IDs may be invalid.",
+        );
       }
       return;
     }
@@ -578,6 +583,7 @@ export default function CrawlPage() {
     setCompareJobA(a);
     setCompareJobB(b);
     pendingCompareFromUrlRef.current = null;
+    setCompareUrlHydrationNotice(null);
   }, [jobsList, jobsListLoading, jobsListLoadingMore, jobsListNextCursor, loadMoreJobsForCompare]);
 
   useEffect(() => {
@@ -1261,6 +1267,9 @@ export default function CrawlPage() {
             <div className="mt-2 text-xs text-zinc-500">
               Searching older jobs to resolve URL compare pair…
             </div>
+          ) : null}
+          {compareUrlHydrationNotice ? (
+            <div className="mt-2 text-xs text-amber-700">{compareUrlHydrationNotice}</div>
           ) : null}
           {jobsListError ? <div className="mt-2 text-sm text-red-600">{jobsListError}</div> : null}
           {!jobsListError && !jobsListLoading && jobsList.length === 0 ? (
