@@ -592,6 +592,7 @@ export default function CrawlPage() {
   const [compareSortDir, setCompareSortDir] = useState<"asc" | "desc">("asc");
   const [expandedCompareRowKeys, setExpandedCompareRowKeys] = useState<Set<string>>(() => new Set());
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
+  const [compareLoadMoreError, setCompareLoadMoreError] = useState<string | null>(null);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
   const applyingCompareFiltersFromUrl = useRef(false);
@@ -857,8 +858,10 @@ export default function CrawlPage() {
       comparePreviewAbortRef.current?.abort();
       comparePreviewAbortRef.current = null;
       setCompareDiffPreview(null);
+      setCompareLoadMoreError(null);
       return;
     }
+    setCompareLoadMoreError(null);
     setCompareDiffPreview({
       loading: true,
       loadingMore: false,
@@ -987,6 +990,7 @@ export default function CrawlPage() {
 
   const loadMoreCompareDiffs = useCallback(() => {
     if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
+    setCompareLoadMoreError(null);
     setCompareDiffPreview((p) => {
       if (!p?.nextCursor || p.loadingMore || p.loading) return p;
       const cursor = p.nextCursor;
@@ -995,6 +999,10 @@ export default function CrawlPage() {
           const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json&paginate=1&limit=${COMPARE_DIFF_PAGE_LIMIT}&cursor=${encodeURIComponent(cursor)}`;
           const res = await fetch(u, { cache: "no-store" });
           if (!res.ok) {
+            const detail = (await res.text().catch(() => "")).trim();
+            setCompareLoadMoreError(
+              `Could not load more diffs (HTTP ${res.status}).${detail ? ` ${detail.slice(0, 180)}` : ""}`,
+            );
             setCompareDiffPreview((prev) => (prev ? { ...prev, loadingMore: false } : prev));
             return;
           }
@@ -1030,6 +1038,7 @@ export default function CrawlPage() {
             };
           });
         } catch {
+          setCompareLoadMoreError("Could not load more diffs (network error).");
           setCompareDiffPreview((prev) => (prev ? { ...prev, loadingMore: false } : prev));
         }
       })();
@@ -1447,6 +1456,19 @@ export default function CrawlPage() {
     setCompareDiffPreview(null);
     setCompareJobA("");
     setCompareJobB("");
+  }
+
+  function resetCompareViewControls() {
+    setCompareTableFilterKind("all");
+    setCompareTableFilterText("");
+    setCompareOnlyStatusChanges(false);
+    setCompareFieldFilter("all");
+    setCompareFieldAnyOf(null);
+    setComparePresetIncludeNewRemoved(false);
+    setComparePreset("all");
+    setCompareSortKey("kind");
+    setCompareSortDir("asc");
+    setExpandedCompareRowKeys(new Set());
   }
 
   function downloadFilteredComparePreviewCsv() {
@@ -2009,6 +2031,13 @@ export default function CrawlPage() {
                 >
                   Collapse visible
                 </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"
+                  onClick={() => resetCompareViewControls()}
+                >
+                  Reset view
+                </button>
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
                   value={compareSortKey}
@@ -2070,6 +2099,9 @@ export default function CrawlPage() {
                   for the complete diff.
                 </span>
               </div>
+              {compareLoadMoreError ? (
+                <div className="border-b border-zinc-100 px-3 py-2 text-xs text-red-600">{compareLoadMoreError}</div>
+              ) : null}
               <div className="max-h-64 overflow-auto">
                 {filteredCompareRows.length === 0 ? (
                   <div className="px-3 py-4 text-xs text-zinc-500">No compare rows match the current filters.</div>
