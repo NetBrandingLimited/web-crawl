@@ -2080,7 +2080,7 @@ export default function CrawlPage() {
                 )}
                 {filteredCompareRows.length === 0 ? null : (
                   <table className="min-w-full text-left text-xs">
-                    <thead className="bg-zinc-50 text-zinc-500">
+                    <thead className="sticky top-0 z-10 bg-zinc-50 text-zinc-500">
                       <tr>
                         <th className="px-3 py-2 font-medium">
                           <button
@@ -2216,6 +2216,10 @@ export default function CrawlPage() {
               {sortedFilteredCompareRows.length > 200 ? (
                 <div className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
                   Showing first 200 rows. Narrow filters to inspect specific diffs.
+                </div>
+              ) : sortedFilteredCompareRows.length > 0 ? (
+                <div className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
+                  Showing {visibleSortedCompareRows.length} of {sortedFilteredCompareRows.length} filtered row(s).
                 </div>
               ) : null}
             </div>
