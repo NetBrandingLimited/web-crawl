@@ -754,7 +754,7 @@ export default function CrawlPage() {
     compareTableFilterText,
   ]);
 
-  function applyComparePreset(preset: ComparePresetId) {
+  function applyComparePreset(preset: ComparePresetId, includeNewRemoved = false) {
     setComparePreset(preset);
     if (preset === "all") {
       setCompareTableFilterKind("all");
@@ -768,6 +768,7 @@ export default function CrawlPage() {
     setCompareFieldFilter("all");
     setCompareFieldAnyOf(COMPARE_PRESET_FIELD_GROUPS[preset]);
     setCompareOnlyStatusChanges(false);
+    setComparePresetIncludeNewRemoved(includeNewRemoved);
   }
 
   useEffect(() => {
@@ -1479,6 +1480,28 @@ export default function CrawlPage() {
                     onClick={() => applyComparePreset(id)}
                     className={`rounded-md border px-2 py-1 text-xs ${
                       comparePreset === id
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2">
+                <span className="text-xs text-zinc-500">One-click include new/removed:</span>
+                {([
+                  ["status", "Status + N/R"],
+                  ["content", "Content + N/R"],
+                  ["technical", "Technical + N/R"],
+                  ["performance", "Performance + N/R"],
+                ] as const).map(([id, label]) => (
+                  <button
+                    key={`${id}-nr`}
+                    type="button"
+                    onClick={() => applyComparePreset(id, true)}
+                    className={`rounded-md border px-2 py-1 text-xs ${
+                      comparePreset === id && comparePresetIncludeNewRemoved
                         ? "border-zinc-900 bg-zinc-900 text-white"
                         : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
                     }`}
