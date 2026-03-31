@@ -1167,7 +1167,9 @@ export default function CrawlPage() {
           <div className="text-right text-xs text-zinc-500">
             {jobId ? (
               <div>
-                <div className="font-mono">job: {jobId}</div>
+                <div className="inline-flex max-w-full items-center rounded-md border border-zinc-300 bg-zinc-100 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide text-zinc-900 whitespace-nowrap">
+                  job: {jobId}
+                </div>
                 <div className="mt-2 flex flex-wrap justify-end gap-2">
                   <button
                     className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 hover:bg-zinc-50"
