@@ -81,6 +81,15 @@ type CompareChangedField =
   | "html_lang"
   | "response_time_ms";
 type ComparePresetId = "all" | "status" | "content" | "technical" | "performance";
+
+/** Fields used by quick presets (any match in `changed_fields` counts). */
+const COMPARE_PRESET_FIELD_GROUPS: Record<Exclude<ComparePresetId, "all">, CompareChangedField[]> = {
+  status: ["status"],
+  content: ["title", "meta_description", "word_count", "h1_text", "h1_count", "content_hash"],
+  technical: ["canonical", "robots_meta", "meta_refresh", "x_robots_tag", "html_lang", "content_type"],
+  performance: ["response_time_ms"],
+};
+
 type CompareDiffRow = {
   change_kind: string;
   changed_fields: string;
@@ -482,6 +491,8 @@ export default function CrawlPage() {
   const [compareTableFilterText, setCompareTableFilterText] = useState("");
   const [compareOnlyStatusChanges, setCompareOnlyStatusChanges] = useState(false);
   const [compareFieldFilter, setCompareFieldFilter] = useState<"all" | CompareChangedField>("all");
+  /** When set, row must include at least one of these in `changed_fields` (presets). Manual single-field uses `compareFieldFilter` instead. */
+  const [compareFieldAnyOf, setCompareFieldAnyOf] = useState<CompareChangedField[] | null>(null);
   const [comparePreset, setComparePreset] = useState<ComparePresetId>("all");
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
@@ -716,7 +727,12 @@ export default function CrawlPage() {
         .split("|")
         .map((f) => f.trim())
         .filter(Boolean);
-      if (compareFieldFilter !== "all" && !fields.includes(compareFieldFilter)) return false;
+      if (compareFieldAnyOf && compareFieldAnyOf.length > 0) {
+        if (r.change_kind !== "changed") return false;
+        if (!compareFieldAnyOf.some((f) => fields.includes(f))) return false;
+      } else if (compareFieldFilter !== "all" && !fields.includes(compareFieldFilter)) {
+        return false;
+      }
       if (compareOnlyStatusChanges) {
         if (!fields.includes("status")) return false;
       }
@@ -724,36 +740,27 @@ export default function CrawlPage() {
       const blob = `${r.url}\n${r.changed_fields}\n${r.title_a}\n${r.title_b}\n${r.http_status_a}\n${r.http_status_b}`.toLowerCase();
       return blob.includes(q);
     });
-  }, [compareDiffPreview?.rows, compareFieldFilter, compareOnlyStatusChanges, compareTableFilterKind, compareTableFilterText]);
+  }, [
+    compareDiffPreview?.rows,
+    compareFieldAnyOf,
+    compareFieldFilter,
+    compareOnlyStatusChanges,
+    compareTableFilterKind,
+    compareTableFilterText,
+  ]);
 
   function applyComparePreset(preset: ComparePresetId) {
     setComparePreset(preset);
     if (preset === "all") {
       setCompareTableFilterKind("all");
       setCompareFieldFilter("all");
-      setCompareOnlyStatusChanges(false);
-      return;
-    }
-    if (preset === "status") {
-      setCompareTableFilterKind("changed");
-      setCompareFieldFilter("status");
-      setCompareOnlyStatusChanges(true);
-      return;
-    }
-    if (preset === "content") {
-      setCompareTableFilterKind("changed");
-      setCompareFieldFilter("title");
-      setCompareOnlyStatusChanges(false);
-      return;
-    }
-    if (preset === "technical") {
-      setCompareTableFilterKind("changed");
-      setCompareFieldFilter("canonical");
+      setCompareFieldAnyOf(null);
       setCompareOnlyStatusChanges(false);
       return;
     }
     setCompareTableFilterKind("changed");
-    setCompareFieldFilter("response_time_ms");
+    setCompareFieldFilter("all");
+    setCompareFieldAnyOf(COMPARE_PRESET_FIELD_GROUPS[preset]);
     setCompareOnlyStatusChanges(false);
   }
 
@@ -1474,12 +1481,24 @@ export default function CrawlPage() {
                   </button>
                 ))}
               </div>
+              <p className="border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-500">
+                Presets show <span className="font-mono">changed</span> rows where <span className="font-medium">any</span> of the preset’s fields
+                appears in <span className="font-mono">changed_fields</span> (new/removed URLs stay hidden until you pick{" "}
+                <span className="font-mono">All</span> preset or <span className="font-mono">All change kinds</span>).
+              </p>
+              {compareFieldAnyOf && compareFieldAnyOf.length > 0 ? (
+                <div className="border-b border-zinc-100 px-3 py-1.5 text-[11px] text-zinc-600">
+                  <span className="font-medium">Preset fields (any of):</span>{" "}
+                  <span className="font-mono">{compareFieldAnyOf.join(", ")}</span>
+                </div>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2">
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
                   value={compareTableFilterKind}
                   onChange={(e) => {
                     setComparePreset("all");
+                    setCompareFieldAnyOf(null);
                     setCompareTableFilterKind(e.target.value as "all" | CompareChangeKind);
                   }}
                 >
@@ -1493,6 +1512,7 @@ export default function CrawlPage() {
                   value={compareTableFilterText}
                   onChange={(e) => {
                     setComparePreset("all");
+                    setCompareFieldAnyOf(null);
                     setCompareTableFilterText(e.target.value);
                   }}
                   placeholder="Filter diff rows by URL/title/status/fields…"
@@ -1503,6 +1523,7 @@ export default function CrawlPage() {
                   value={compareFieldFilter}
                   onChange={(e) => {
                     setComparePreset("all");
+                    setCompareFieldAnyOf(null);
                     setCompareFieldFilter(e.target.value as "all" | CompareChangedField);
                   }}
                 >
@@ -1529,6 +1550,7 @@ export default function CrawlPage() {
                     checked={compareOnlyStatusChanges}
                     onChange={(e) => {
                       setComparePreset("all");
+                      setCompareFieldAnyOf(null);
                       setCompareOnlyStatusChanges(e.target.checked);
                     }}
                   />
