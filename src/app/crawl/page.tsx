@@ -80,6 +80,7 @@ type CompareChangedField =
   | "x_robots_tag"
   | "html_lang"
   | "response_time_ms";
+type ComparePresetId = "all" | "status" | "content" | "technical" | "performance";
 type CompareDiffRow = {
   change_kind: string;
   changed_fields: string;
@@ -481,6 +482,7 @@ export default function CrawlPage() {
   const [compareTableFilterText, setCompareTableFilterText] = useState("");
   const [compareOnlyStatusChanges, setCompareOnlyStatusChanges] = useState(false);
   const [compareFieldFilter, setCompareFieldFilter] = useState<"all" | CompareChangedField>("all");
+  const [comparePreset, setComparePreset] = useState<ComparePresetId>("all");
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
   const pendingCompareFromUrlRef = useRef<{ a: string; b: string } | null>(null);
@@ -723,6 +725,37 @@ export default function CrawlPage() {
       return blob.includes(q);
     });
   }, [compareDiffPreview?.rows, compareFieldFilter, compareOnlyStatusChanges, compareTableFilterKind, compareTableFilterText]);
+
+  function applyComparePreset(preset: ComparePresetId) {
+    setComparePreset(preset);
+    if (preset === "all") {
+      setCompareTableFilterKind("all");
+      setCompareFieldFilter("all");
+      setCompareOnlyStatusChanges(false);
+      return;
+    }
+    if (preset === "status") {
+      setCompareTableFilterKind("changed");
+      setCompareFieldFilter("status");
+      setCompareOnlyStatusChanges(true);
+      return;
+    }
+    if (preset === "content") {
+      setCompareTableFilterKind("changed");
+      setCompareFieldFilter("title");
+      setCompareOnlyStatusChanges(false);
+      return;
+    }
+    if (preset === "technical") {
+      setCompareTableFilterKind("changed");
+      setCompareFieldFilter("canonical");
+      setCompareOnlyStatusChanges(false);
+      return;
+    }
+    setCompareTableFilterKind("changed");
+    setCompareFieldFilter("response_time_ms");
+    setCompareOnlyStatusChanges(false);
+  }
 
   useEffect(() => {
     setUrlTableFilter("");
@@ -1419,10 +1452,36 @@ export default function CrawlPage() {
           {compareDiffPreview && !compareDiffPreview.loading && compareDiffPreview.rows ? (
             <div className="mt-4 rounded-lg border border-zinc-100">
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2">
+                <span className="text-xs text-zinc-500">Quick presets:</span>
+                {([
+                  ["all", "All"],
+                  ["status", "Status"],
+                  ["content", "Content"],
+                  ["technical", "Technical"],
+                  ["performance", "Performance"],
+                ] as const).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => applyComparePreset(id)}
+                    className={`rounded-md border px-2 py-1 text-xs ${
+                      comparePreset === id
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2">
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
                   value={compareTableFilterKind}
-                  onChange={(e) => setCompareTableFilterKind(e.target.value as "all" | CompareChangeKind)}
+                  onChange={(e) => {
+                    setComparePreset("all");
+                    setCompareTableFilterKind(e.target.value as "all" | CompareChangeKind);
+                  }}
                 >
                   <option value="all">All change kinds</option>
                   <option value="changed">changed</option>
@@ -1432,14 +1491,20 @@ export default function CrawlPage() {
                 <input
                   className="min-w-[14rem] flex-1 rounded-md border border-zinc-200 px-2 py-1 text-xs"
                   value={compareTableFilterText}
-                  onChange={(e) => setCompareTableFilterText(e.target.value)}
+                  onChange={(e) => {
+                    setComparePreset("all");
+                    setCompareTableFilterText(e.target.value);
+                  }}
                   placeholder="Filter diff rows by URL/title/status/fields…"
                   type="search"
                 />
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
                   value={compareFieldFilter}
-                  onChange={(e) => setCompareFieldFilter(e.target.value as "all" | CompareChangedField)}
+                  onChange={(e) => {
+                    setComparePreset("all");
+                    setCompareFieldFilter(e.target.value as "all" | CompareChangedField);
+                  }}
                 >
                   <option value="all">All fields</option>
                   <option value="status">status</option>
@@ -1462,7 +1527,10 @@ export default function CrawlPage() {
                     type="checkbox"
                     className="h-3.5 w-3.5 rounded border-zinc-300"
                     checked={compareOnlyStatusChanges}
-                    onChange={(e) => setCompareOnlyStatusChanges(e.target.checked)}
+                    onChange={(e) => {
+                      setComparePreset("all");
+                      setCompareOnlyStatusChanges(e.target.checked);
+                    }}
                   />
                   Status changes only
                 </label>
