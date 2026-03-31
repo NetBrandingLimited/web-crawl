@@ -437,6 +437,7 @@ export default function CrawlPage() {
   const [urlsNextCursor, setUrlsNextCursor] = useState<string | null>(null);
   const [urlsLoadingMore, setUrlsLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [crawling, setCrawling] = useState(false);
   const [crawlSteps, setCrawlSteps] = useState(0);
   const [reportSummary, setReportSummary] = useState<CrawlSummaryResponse["totals"] | null>(null);
@@ -800,21 +801,28 @@ export default function CrawlPage() {
   async function refresh(id?: string) {
     const effectiveId = id ?? jobId;
     if (!effectiveId) return;
-    setError(null);
-    const res = await fetch(`/api/v1/crawl-jobs/${effectiveId}`, { cache: "no-store" });
-    if (!res.ok) {
-      setError(res.status === 404 ? "Crawl job not found." : `Could not load job status (${res.status}).`);
-      return;
+    setRefreshing(true);
+    try {
+      setError(null);
+      const res = await fetch(`/api/v1/crawl-jobs/${effectiveId}`, { cache: "no-store" });
+      if (!res.ok) {
+        setError(res.status === 404 ? "Crawl job not found." : `Could not load job status (${res.status}).`);
+        return;
+      }
+      setStatus((await res.json()) as CrawlJobStatusResponse);
+      const summaryRes = await fetch(`/api/v1/crawl-jobs/${effectiveId}/reports?report=summary`, {
+        cache: "no-store",
+      });
+      if (summaryRes.ok) {
+        const summaryJson = (await summaryRes.json()) as CrawlSummaryResponse;
+        setReportSummary(summaryJson.totals);
+      }
+      await loadUrls(effectiveId);
+    } catch (e) {
+      setError(describeFetchFailure(e, "Refresh crawl job"));
+    } finally {
+      setRefreshing(false);
     }
-    setStatus((await res.json()) as CrawlJobStatusResponse);
-    const summaryRes = await fetch(`/api/v1/crawl-jobs/${effectiveId}/reports?report=summary`, {
-      cache: "no-store",
-    });
-    if (summaryRes.ok) {
-      const summaryJson = (await summaryRes.json()) as CrawlSummaryResponse;
-      setReportSummary(summaryJson.totals);
-    }
-    await loadUrls(effectiveId);
   }
 
   async function loadUrls(id?: string) {
@@ -1171,9 +1179,10 @@ export default function CrawlPage() {
                   <button
                     className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 hover:bg-zinc-50"
                     onClick={() => refresh()}
+                    disabled={refreshing}
                     type="button"
                   >
-                    Refresh
+                    {refreshing ? "Refreshing…" : "Refresh"}
                   </button>
                 </div>
               </div>
