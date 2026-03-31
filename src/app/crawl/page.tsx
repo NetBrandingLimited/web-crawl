@@ -592,6 +592,7 @@ export default function CrawlPage() {
   const [compareSortDir, setCompareSortDir] = useState<"asc" | "desc">("asc");
   const [compareTablePage, setCompareTablePage] = useState(1);
   const [compareTablePageSize, setCompareTablePageSize] = useState<100 | 200 | 500>(200);
+  const [comparePageJumpInput, setComparePageJumpInput] = useState("");
   const [expandedCompareRowKeys, setExpandedCompareRowKeys] = useState<Set<string>>(() => new Set());
   const [compareExpandOnlyChangedFields, setCompareExpandOnlyChangedFields] = useState(true);
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
@@ -1008,6 +1009,9 @@ export default function CrawlPage() {
   useEffect(() => {
     setCompareTablePage((p) => Math.min(Math.max(1, p), compareTableTotalPages));
   }, [compareTableTotalPages]);
+  useEffect(() => {
+    setComparePageJumpInput(String(compareTablePage));
+  }, [compareTablePage]);
   const visibleSortedCompareRows = useMemo(() => {
     const start = (compareTablePage - 1) * compareTablePageSize;
     return sortedFilteredCompareRows.slice(start, start + compareTablePageSize);
@@ -2328,6 +2332,25 @@ export default function CrawlPage() {
                   {sortedFilteredCompareRows.length} filtered row(s).
                 </div>
                 <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-1">
+                    <span className="text-zinc-500">Go to</span>
+                    <input
+                      className="w-14 rounded border border-zinc-200 px-1.5 py-1 text-xs text-zinc-700"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={comparePageJumpInput}
+                      onChange={(e) => setComparePageJumpInput(e.target.value.replace(/[^0-9]/g, ""))}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        const n = Number(comparePageJumpInput);
+                        if (!Number.isFinite(n) || n < 1) {
+                          setCompareTablePage(1);
+                          return;
+                        }
+                        setCompareTablePage(Math.min(compareTableTotalPages, Math.floor(n)));
+                      }}
+                    />
+                  </label>
                   <button
                     type="button"
                     className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
