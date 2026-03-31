@@ -590,6 +590,8 @@ export default function CrawlPage() {
   const [comparePreset, setComparePreset] = useState<ComparePresetId>("all");
   const [compareSortKey, setCompareSortKey] = useState<CompareSortKey>("kind");
   const [compareSortDir, setCompareSortDir] = useState<"asc" | "desc">("asc");
+  const [compareTablePage, setCompareTablePage] = useState(1);
+  const [compareTablePageSize, setCompareTablePageSize] = useState<100 | 200 | 500>(200);
   const [expandedCompareRowKeys, setExpandedCompareRowKeys] = useState<Set<string>>(() => new Set());
   const [compareExpandOnlyChangedFields, setCompareExpandOnlyChangedFields] = useState(true);
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
@@ -996,7 +998,20 @@ export default function CrawlPage() {
     });
     return rows;
   }, [filteredCompareRows, compareSortDir, compareSortKey]);
-  const visibleSortedCompareRows = useMemo(() => sortedFilteredCompareRows.slice(0, 200), [sortedFilteredCompareRows]);
+  useEffect(() => {
+    setCompareTablePage(1);
+  }, [filteredCompareRows.length, compareSortDir, compareSortKey, compareTablePageSize]);
+  const compareTableTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(sortedFilteredCompareRows.length / compareTablePageSize)),
+    [compareTablePageSize, sortedFilteredCompareRows.length],
+  );
+  useEffect(() => {
+    setCompareTablePage((p) => Math.min(Math.max(1, p), compareTableTotalPages));
+  }, [compareTableTotalPages]);
+  const visibleSortedCompareRows = useMemo(() => {
+    const start = (compareTablePage - 1) * compareTablePageSize;
+    return sortedFilteredCompareRows.slice(start, start + compareTablePageSize);
+  }, [compareTablePage, compareTablePageSize, sortedFilteredCompareRows]);
   const filteredCompareKindCounts = useMemo(() => {
     let changed = 0;
     let newInB = 0;
@@ -1489,6 +1504,8 @@ export default function CrawlPage() {
     setComparePreset("all");
     setCompareSortKey("kind");
     setCompareSortDir("asc");
+    setCompareTablePageSize(200);
+    setCompareTablePage(1);
     setCompareExpandOnlyChangedFields(true);
     setExpandedCompareRowKeys(new Set());
   }
@@ -2069,6 +2086,15 @@ export default function CrawlPage() {
                 >
                   Reset view
                 </button>
+                <select
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  value={compareTablePageSize}
+                  onChange={(e) => setCompareTablePageSize(Number(e.target.value) as 100 | 200 | 500)}
+                >
+                  <option value={100}>100 / page</option>
+                  <option value={200}>200 / page</option>
+                  <option value={500}>500 / page</option>
+                </select>
                 <label className="inline-flex items-center gap-1 text-xs text-zinc-700">
                   <input
                     type="checkbox"
@@ -2296,13 +2322,33 @@ export default function CrawlPage() {
                   </table>
                 )}
               </div>
-              {sortedFilteredCompareRows.length > 200 ? (
-                <div className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
-                  Showing first 200 rows. Narrow filters to inspect specific diffs.
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
+                <div>
+                  Page {compareTablePage} of {compareTableTotalPages}. Showing {visibleSortedCompareRows.length} of{" "}
+                  {sortedFilteredCompareRows.length} filtered row(s).
                 </div>
-              ) : sortedFilteredCompareRows.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    onClick={() => setCompareTablePage((p) => Math.max(1, p - 1))}
+                    disabled={compareTablePage <= 1}
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    onClick={() => setCompareTablePage((p) => Math.min(compareTableTotalPages, p + 1))}
+                    disabled={compareTablePage >= compareTableTotalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+              {sortedFilteredCompareRows.length > compareTablePageSize ? (
                 <div className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
-                  Showing {visibleSortedCompareRows.length} of {sortedFilteredCompareRows.length} filtered row(s).
+                  Tip: use sort + filters to focus priority rows, then page through remaining results.
                 </div>
               ) : null}
             </div>
