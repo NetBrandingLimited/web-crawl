@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const WORKER_STEPS_CAP = 4000;
 const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
@@ -139,6 +139,28 @@ const COMPARE_FULL_CSV_HEADERS = [
 ] as const;
 
 type CompareFullCsvHeader = (typeof COMPARE_FULL_CSV_HEADERS)[number];
+
+const COMPARE_EXPAND_FIELD_PAIRS: Array<{
+  label: string;
+  a: CompareFullCsvHeader;
+  b: CompareFullCsvHeader;
+}> = [
+  { label: "Depth", a: "depth_a", b: "depth_b" },
+  { label: "HTTP status", a: "http_status_a", b: "http_status_b" },
+  { label: "Title", a: "title_a", b: "title_b" },
+  { label: "Canonical", a: "canonical_a", b: "canonical_b" },
+  { label: "Meta description", a: "meta_description_a", b: "meta_description_b" },
+  { label: "Word count", a: "word_count_a", b: "word_count_b" },
+  { label: "H1 text", a: "h1_text_a", b: "h1_text_b" },
+  { label: "H1 count", a: "h1_count_a", b: "h1_count_b" },
+  { label: "Content-Type", a: "content_type_a", b: "content_type_b" },
+  { label: "Robots meta", a: "robots_meta_a", b: "robots_meta_b" },
+  { label: "Meta refresh", a: "meta_refresh_a", b: "meta_refresh_b" },
+  { label: "Content hash", a: "content_hash_a", b: "content_hash_b" },
+  { label: "X-Robots-Tag", a: "x_robots_tag_a", b: "x_robots_tag_b" },
+  { label: "HTML lang", a: "html_lang_a", b: "html_lang_b" },
+  { label: "Response time (ms)", a: "response_time_ms_a", b: "response_time_ms_b" },
+];
 
 type CompareDiffRow = {
   change_kind: string;
@@ -568,6 +590,7 @@ export default function CrawlPage() {
   const [comparePreset, setComparePreset] = useState<ComparePresetId>("all");
   const [compareSortKey, setCompareSortKey] = useState<CompareSortKey>("kind");
   const [compareSortDir, setCompareSortDir] = useState<"asc" | "desc">("asc");
+  const [expandedCompareRowKeys, setExpandedCompareRowKeys] = useState<Set<string>>(() => new Set());
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
@@ -902,6 +925,10 @@ export default function CrawlPage() {
     };
   }, [compareJobA, compareJobB]);
 
+  useEffect(() => {
+    setExpandedCompareRowKeys(new Set());
+  }, [compareJobA, compareJobB]);
+
   const filteredCompareRows = useMemo(() => {
     const rows = compareDiffPreview?.rows ?? [];
     const kind = compareTableFilterKind;
@@ -1034,6 +1061,15 @@ export default function CrawlPage() {
       }
       setCompareSortDir("asc");
       return nextKey;
+    });
+  }
+
+  function toggleCompareRowExpanded(rowKey: string) {
+    setExpandedCompareRowKeys((prev) => {
+      const n = new Set(prev);
+      if (n.has(rowKey)) n.delete(rowKey);
+      else n.add(rowKey);
+      return n;
     });
   }
 
@@ -2005,6 +2041,11 @@ export default function CrawlPage() {
                 {filteredCompareRows.length === 0 ? (
                   <div className="px-3 py-4 text-xs text-zinc-500">No compare rows match the current filters.</div>
                 ) : (
+                  <p className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500">
+                    Click a row to expand full A vs B field values. Differing values are emphasized.
+                  </p>
+                )}
+                {filteredCompareRows.length === 0 ? null : (
                   <table className="min-w-full text-left text-xs">
                     <thead className="bg-zinc-50 text-zinc-500">
                       <tr>
@@ -2057,35 +2098,84 @@ export default function CrawlPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
-                      {sortedFilteredCompareRows.slice(0, 200).map((r, i) => (
-                        <tr key={`${r.change_kind}:${r.url}:${i}`}>
-                          <td className="px-3 py-2 font-mono">{r.change_kind}</td>
-                          <td className="max-w-[38rem] truncate px-3 py-2 font-mono">{r.url}</td>
-                          <td className="px-3 py-2">
-                            {r.changed_fields ? (
-                              <div className="flex flex-wrap gap-1">
-                                {r.changed_fields
-                                  .split("|")
-                                  .map((f) => f.trim())
-                                  .filter(Boolean)
-                                  .map((f) => (
-                                    <span
-                                      key={`${r.url}:${f}`}
-                                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-700"
-                                    >
-                                      {f}
-                                    </span>
-                                  ))}
-                              </div>
-                            ) : (
-                              "-"
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            {String(r.http_status_a || "-")} / {String(r.http_status_b || "-")}
-                          </td>
-                        </tr>
-                      ))}
+                      {sortedFilteredCompareRows.slice(0, 200).map((r, i) => {
+                        const rowKey = `${r.change_kind}\t${r.url}`;
+                        const open = expandedCompareRowKeys.has(rowKey);
+                        return (
+                          <Fragment key={`${r.change_kind}:${r.url}:${i}`}>
+                            <tr
+                              className="cursor-pointer hover:bg-zinc-50/70"
+                              onClick={() => toggleCompareRowExpanded(rowKey)}
+                            >
+                              <td className="px-3 py-2 font-mono">
+                                <span className="mr-1 inline-block w-3 text-zinc-400">{open ? "▼" : "▶"}</span>
+                                {r.change_kind}
+                              </td>
+                              <td className="max-w-[38rem] truncate px-3 py-2 font-mono">{r.url}</td>
+                              <td className="px-3 py-2">
+                                {r.changed_fields ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {r.changed_fields
+                                      .split("|")
+                                      .map((f) => f.trim())
+                                      .filter(Boolean)
+                                      .map((f) => (
+                                        <span
+                                          key={`${r.url}:${f}`}
+                                          className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-700"
+                                        >
+                                          {f}
+                                        </span>
+                                      ))}
+                                  </div>
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                {String(r.http_status_a || "-")} / {String(r.http_status_b || "-")}
+                              </td>
+                            </tr>
+                            {open ? (
+                              <tr className="bg-zinc-50/80">
+                                <td colSpan={4} className="px-3 py-3">
+                                  <div className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]">
+                                    <div className="border-b border-zinc-200 pb-1 font-semibold text-zinc-600">Field</div>
+                                    <div className="border-b border-zinc-200 pb-1 font-mono font-semibold text-zinc-600">
+                                      A (baseline)
+                                    </div>
+                                    <div className="border-b border-zinc-200 pb-1 font-mono font-semibold text-zinc-600">
+                                      B (compare)
+                                    </div>
+                                    {COMPARE_EXPAND_FIELD_PAIRS.map((p) => {
+                                      const va = r.fullRow[p.a];
+                                      const vb = r.fullRow[p.b];
+                                      const diff = va !== vb;
+                                      return (
+                                        <Fragment key={p.label}>
+                                          <div className={`py-0.5 font-medium ${diff ? "text-zinc-900" : "text-zinc-500"}`}>
+                                            {p.label}
+                                          </div>
+                                          <div
+                                            className={`break-words py-0.5 font-mono ${diff ? "text-zinc-900" : "text-zinc-600"}`}
+                                          >
+                                            {va === "" ? "—" : va}
+                                          </div>
+                                          <div
+                                            className={`break-words py-0.5 font-mono ${diff ? "text-zinc-900" : "text-zinc-600"}`}
+                                          >
+                                            {vb === "" ? "—" : vb}
+                                          </div>
+                                        </Fragment>
+                                      );
+                                    })}
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}
