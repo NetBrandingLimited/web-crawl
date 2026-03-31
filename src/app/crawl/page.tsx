@@ -464,6 +464,7 @@ export default function CrawlPage() {
   } | null>(null);
   const [compareTableFilterKind, setCompareTableFilterKind] = useState<"all" | CompareChangeKind>("all");
   const [compareTableFilterText, setCompareTableFilterText] = useState("");
+  const [compareOnlyStatusChanges, setCompareOnlyStatusChanges] = useState(false);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
   const pendingCompareFromUrlRef = useRef<{ a: string; b: string } | null>(null);
@@ -693,11 +694,18 @@ export default function CrawlPage() {
     const q = compareTableFilterText.trim().toLowerCase();
     return rows.filter((r) => {
       if (kind !== "all" && r.change_kind !== kind) return false;
+      if (compareOnlyStatusChanges) {
+        const fields = r.changed_fields
+          .split("|")
+          .map((f) => f.trim())
+          .filter(Boolean);
+        if (!fields.includes("status")) return false;
+      }
       if (!q) return true;
       const blob = `${r.url}\n${r.changed_fields}\n${r.title_a}\n${r.title_b}\n${r.http_status_a}\n${r.http_status_b}`.toLowerCase();
       return blob.includes(q);
     });
-  }, [compareDiffPreview?.rows, compareTableFilterKind, compareTableFilterText]);
+  }, [compareDiffPreview?.rows, compareOnlyStatusChanges, compareTableFilterKind, compareTableFilterText]);
 
   useEffect(() => {
     setUrlTableFilter("");
@@ -1411,6 +1419,15 @@ export default function CrawlPage() {
                   placeholder="Filter diff rows by URL/title/status/fields…"
                   type="search"
                 />
+                <label className="inline-flex items-center gap-1 text-xs text-zinc-700">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded border-zinc-300"
+                    checked={compareOnlyStatusChanges}
+                    onChange={(e) => setCompareOnlyStatusChanges(e.target.checked)}
+                  />
+                  Status changes only
+                </label>
                 <span className="text-xs text-zinc-500">{filteredCompareRows.length} row(s)</span>
               </div>
               <div className="max-h-64 overflow-auto">
@@ -1431,7 +1448,26 @@ export default function CrawlPage() {
                         <tr key={`${r.change_kind}:${r.url}:${i}`}>
                           <td className="px-3 py-2 font-mono">{r.change_kind}</td>
                           <td className="max-w-[38rem] truncate px-3 py-2 font-mono">{r.url}</td>
-                          <td className="px-3 py-2">{r.changed_fields || "-"}</td>
+                          <td className="px-3 py-2">
+                            {r.changed_fields ? (
+                              <div className="flex flex-wrap gap-1">
+                                {r.changed_fields
+                                  .split("|")
+                                  .map((f) => f.trim())
+                                  .filter(Boolean)
+                                  .map((f) => (
+                                    <span
+                                      key={`${r.url}:${f}`}
+                                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-700"
+                                    >
+                                      {f}
+                                    </span>
+                                  ))}
+                              </div>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
                           <td className="px-3 py-2">
                             {String(r.http_status_a || "-")} / {String(r.http_status_b || "-")}
                           </td>
