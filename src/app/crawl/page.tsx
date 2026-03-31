@@ -687,6 +687,8 @@ export default function CrawlPage() {
     const statusOnly = url.searchParams.get("cs");
     const preset = url.searchParams.get("cp");
     const includeNr = url.searchParams.get("cnr");
+    const sortKey = url.searchParams.get("csk");
+    const sortDir = url.searchParams.get("csd");
     applyingCompareFiltersFromUrl.current = true;
     if (kind === "all" || kind === "changed" || kind === "new_in_b" || kind === "removed_in_a") {
       setCompareTableFilterKind(kind);
@@ -713,6 +715,18 @@ export default function CrawlPage() {
     if (typeof query === "string") setCompareTableFilterText(query);
     if (statusOnly === "1") setCompareOnlyStatusChanges(true);
     if (includeNr === "1") setComparePresetIncludeNewRemoved(true);
+    if (
+      sortKey === "kind" ||
+      sortKey === "url" ||
+      sortKey === "fields" ||
+      sortKey === "status_a" ||
+      sortKey === "status_b"
+    ) {
+      setCompareSortKey(sortKey);
+    }
+    if (sortDir === "asc" || sortDir === "desc") {
+      setCompareSortDir(sortDir);
+    }
     if (preset === "all" || preset === "status" || preset === "content" || preset === "technical" || preset === "performance") {
       setComparePreset(preset);
       if (preset === "all") {
@@ -796,6 +810,10 @@ export default function CrawlPage() {
     else url.searchParams.delete("cp");
     if (comparePresetIncludeNewRemoved) url.searchParams.set("cnr", "1");
     else url.searchParams.delete("cnr");
+    if (compareSortKey !== "kind") url.searchParams.set("csk", compareSortKey);
+    else url.searchParams.delete("csk");
+    if (compareSortDir !== "asc") url.searchParams.set("csd", compareSortDir);
+    else url.searchParams.delete("csd");
     const next = `${url.pathname}${url.search}${url.hash}`;
     if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
       window.history.replaceState({}, "", next);
@@ -805,6 +823,8 @@ export default function CrawlPage() {
     compareOnlyStatusChanges,
     comparePreset,
     comparePresetIncludeNewRemoved,
+    compareSortDir,
+    compareSortKey,
     compareTableFilterKind,
     compareTableFilterText,
   ]);
