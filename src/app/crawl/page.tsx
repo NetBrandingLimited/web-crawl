@@ -560,8 +560,10 @@ export default function CrawlPage() {
   const [compareFieldAnyOf, setCompareFieldAnyOf] = useState<CompareChangedField[] | null>(null);
   const [comparePresetIncludeNewRemoved, setComparePresetIncludeNewRemoved] = useState(false);
   const [comparePreset, setComparePreset] = useState<ComparePresetId>("all");
+  const [compareLinkCopied, setCompareLinkCopied] = useState(false);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
+  const applyingCompareFiltersFromUrl = useRef(false);
   const pendingCompareFromUrlRef = useRef<{ a: string; b: string } | null>(null);
   const [urlTableFilter, setUrlTableFilter] = useState("");
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
@@ -668,6 +670,56 @@ export default function CrawlPage() {
     setCompareUrlHydrationNotice(null);
   }, []);
 
+  /** Apply compare filter controls from URL once on first load. */
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const kind = url.searchParams.get("ck");
+    const field = url.searchParams.get("cf");
+    const query = url.searchParams.get("cq");
+    const statusOnly = url.searchParams.get("cs");
+    const preset = url.searchParams.get("cp");
+    const includeNr = url.searchParams.get("cnr");
+    applyingCompareFiltersFromUrl.current = true;
+    if (kind === "all" || kind === "changed" || kind === "new_in_b" || kind === "removed_in_a") {
+      setCompareTableFilterKind(kind);
+    }
+    if (
+      field === "all" ||
+      field === "status" ||
+      field === "title" ||
+      field === "canonical" ||
+      field === "meta_description" ||
+      field === "word_count" ||
+      field === "h1_text" ||
+      field === "h1_count" ||
+      field === "content_type" ||
+      field === "robots_meta" ||
+      field === "meta_refresh" ||
+      field === "content_hash" ||
+      field === "x_robots_tag" ||
+      field === "html_lang" ||
+      field === "response_time_ms"
+    ) {
+      setCompareFieldFilter(field);
+    }
+    if (typeof query === "string") setCompareTableFilterText(query);
+    if (statusOnly === "1") setCompareOnlyStatusChanges(true);
+    if (includeNr === "1") setComparePresetIncludeNewRemoved(true);
+    if (preset === "all" || preset === "status" || preset === "content" || preset === "technical" || preset === "performance") {
+      setComparePreset(preset);
+      if (preset === "all") {
+        setCompareFieldAnyOf(null);
+      } else {
+        setCompareFieldAnyOf(COMPARE_PRESET_FIELD_GROUPS[preset]);
+        setCompareTableFilterKind("changed");
+        setCompareFieldFilter("all");
+      }
+    }
+    window.setTimeout(() => {
+      applyingCompareFiltersFromUrl.current = false;
+    }, 0);
+  }, []);
+
   /** Apply compareA/compareB from the URL; auto-page older jobs until both IDs are found (or exhausted). */
   useEffect(() => {
     const pending = pendingCompareFromUrlRef.current;
@@ -719,6 +771,35 @@ export default function CrawlPage() {
       window.history.replaceState({}, "", next);
     }
   }, [compareJobA, compareJobB, jobsList.length]);
+
+  /** Keep compare filter controls in URL for shareable deep links. */
+  useEffect(() => {
+    if (applyingCompareFiltersFromUrl.current) return;
+    const url = new URL(window.location.href);
+    if (compareTableFilterKind !== "all") url.searchParams.set("ck", compareTableFilterKind);
+    else url.searchParams.delete("ck");
+    if (compareFieldFilter !== "all") url.searchParams.set("cf", compareFieldFilter);
+    else url.searchParams.delete("cf");
+    if (compareTableFilterText.trim() !== "") url.searchParams.set("cq", compareTableFilterText.trim());
+    else url.searchParams.delete("cq");
+    if (compareOnlyStatusChanges) url.searchParams.set("cs", "1");
+    else url.searchParams.delete("cs");
+    if (comparePreset !== "all") url.searchParams.set("cp", comparePreset);
+    else url.searchParams.delete("cp");
+    if (comparePresetIncludeNewRemoved) url.searchParams.set("cnr", "1");
+    else url.searchParams.delete("cnr");
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      window.history.replaceState({}, "", next);
+    }
+  }, [
+    compareFieldFilter,
+    compareOnlyStatusChanges,
+    comparePreset,
+    comparePresetIncludeNewRemoved,
+    compareTableFilterKind,
+    compareTableFilterText,
+  ]);
 
   useEffect(() => {
     if (!compareJobA || !compareJobB || compareJobA === compareJobB) {
@@ -1245,6 +1326,17 @@ export default function CrawlPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(objectUrl);
+  }
+
+  async function copyCompareDeepLink() {
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCompareLinkCopied(true);
+      window.setTimeout(() => setCompareLinkCopied(false), 1800);
+    } catch {
+      setError("Could not copy compare link (clipboard blocked or unavailable).");
+    }
   }
 
   async function openJobInViewer(id: string): Promise<boolean> {
@@ -1804,6 +1896,14 @@ export default function CrawlPage() {
               type="button"
             >
               Download compare JSON
+            </button>
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
+              onClick={() => void copyCompareDeepLink()}
+              disabled={!compareJobA || !compareJobB || compareJobA === compareJobB}
+              type="button"
+            >
+              {compareLinkCopied ? "Link copied" : "Copy compare link"}
             </button>
           </div>
         </div>
