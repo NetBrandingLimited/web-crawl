@@ -452,6 +452,7 @@ export default function CrawlPage() {
   } | null>(null);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
+  const pendingCompareFromUrlRef = useRef<{ a: string; b: string } | null>(null);
   const [urlTableFilter, setUrlTableFilter] = useState("");
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
   const [jobsListLoading, setJobsListLoading] = useState(false);
@@ -548,17 +549,36 @@ export default function CrawlPage() {
 
   /** Apply compareA/compareB from the URL once the job list is available (does not wipe URL while list is still empty). */
   useEffect(() => {
-    if (jobsList.length === 0) return;
     const url = new URL(window.location.href);
     const a = url.searchParams.get("compareA") ?? url.searchParams.get("a");
     const b = url.searchParams.get("compareB") ?? url.searchParams.get("b");
     if (!a || !b || a === b) return;
+    pendingCompareFromUrlRef.current = { a, b };
+  }, []);
+
+  /** Apply compareA/compareB from the URL; auto-page older jobs until both IDs are found (or exhausted). */
+  useEffect(() => {
+    const pending = pendingCompareFromUrlRef.current;
+    if (!pending) return;
+    if (jobsList.length === 0) return;
+
+    const { a, b } = pending;
     const ids = new Set(jobsList.map((j) => j.id));
-    if (!ids.has(a) || !ids.has(b)) return;
+    if (!ids.has(a) || !ids.has(b)) {
+      if (jobsListNextCursor && !jobsListLoading && !jobsListLoadingMore) {
+        void loadMoreJobsForCompare();
+        return;
+      }
+      if (!jobsListNextCursor) {
+        pendingCompareFromUrlRef.current = null;
+      }
+      return;
+    }
     applyingCompareFromUrl.current = true;
     setCompareJobA(a);
     setCompareJobB(b);
-  }, [jobsList]);
+    pendingCompareFromUrlRef.current = null;
+  }, [jobsList, jobsListLoading, jobsListLoadingMore, jobsListNextCursor, loadMoreJobsForCompare]);
 
   useEffect(() => {
     if (applyingCompareFromUrl.current) {
