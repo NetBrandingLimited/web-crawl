@@ -36,9 +36,25 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const raw = Number(searchParams.get("limit") ?? "200");
   const limit = Math.min(500, Math.max(1, Number.isFinite(raw) ? Math.floor(raw) : 200));
+  const rawCursor = searchParams.get("cursor");
+  let cursorWhere: { OR: Array<{ createdAt: { lt: Date } } | { createdAt: Date; id: { lt: string } }> } | undefined;
+  if (rawCursor) {
+    const [createdAtIso, id] = rawCursor.split("|");
+    if (!createdAtIso || !id) {
+      return NextResponse.json({ message: "Invalid cursor." }, { status: 400 });
+    }
+    const createdAt = new Date(createdAtIso);
+    if (!Number.isFinite(createdAt.getTime())) {
+      return NextResponse.json({ message: "Invalid cursor timestamp." }, { status: 400 });
+    }
+    cursorWhere = {
+      OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: id } }],
+    };
+  }
 
   const items = await prisma.crawlJob.findMany({
-    orderBy: { createdAt: "desc" },
+    where: cursorWhere,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,
@@ -47,7 +63,9 @@ export async function GET(req: Request) {
       createdAt: true,
     },
   });
-  return NextResponse.json({ items });
+  const last = items.length > 0 ? items[items.length - 1] : null;
+  const next_cursor = items.length === limit && last ? `${last.createdAt.toISOString()}|${last.id}` : null;
+  return NextResponse.json({ items, next_cursor });
 }
 
 export async function POST(req: Request) {

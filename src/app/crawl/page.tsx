@@ -52,6 +52,10 @@ type CrawlJobListItem = {
   status: string;
   createdAt: string;
 };
+type CrawlJobListResponse = {
+  items?: unknown;
+  next_cursor?: unknown;
+};
 
 type CompareDiffCounts = {
   new_in_b: number;
@@ -451,6 +455,8 @@ export default function CrawlPage() {
   const [urlTableFilter, setUrlTableFilter] = useState("");
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
   const [jobsListLoading, setJobsListLoading] = useState(false);
+  const [jobsListLoadingMore, setJobsListLoadingMore] = useState(false);
+  const [jobsListNextCursor, setJobsListNextCursor] = useState<string | null>(null);
   const [jobsListError, setJobsListError] = useState<string | null>(null);
   const [jobDirectoryFilter, setJobDirectoryFilter] = useState("");
   const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
@@ -460,6 +466,7 @@ export default function CrawlPage() {
   const loadJobListForCompare = useCallback(async () => {
     setJobsListLoading(true);
     setJobsListError(null);
+    setJobsListNextCursor(null);
     try {
       const res = await fetch(`/api/v1/crawl-jobs?limit=${JOB_LIST_LIMIT}`, { cache: "no-store" });
       if (!res.ok) {
@@ -469,15 +476,50 @@ export default function CrawlPage() {
         );
         return;
       }
-      const json = (await res.json()) as { items?: unknown };
+      const json = (await res.json()) as CrawlJobListResponse;
       const items = Array.isArray(json.items) ? (json.items as CrawlJobListItem[]) : [];
       setJobsList(items);
+      setJobsListNextCursor(typeof json.next_cursor === "string" && json.next_cursor ? json.next_cursor : null);
     } catch (e) {
       setJobsListError(describeFetchFailure(e, "Load job list"));
     } finally {
       setJobsListLoading(false);
     }
   }, []);
+
+  const loadMoreJobsForCompare = useCallback(async () => {
+    if (!jobsListNextCursor || jobsListLoadingMore || jobsListLoading) return;
+    setJobsListLoadingMore(true);
+    setJobsListError(null);
+    try {
+      const res = await fetch(
+        `/api/v1/crawl-jobs?limit=${JOB_LIST_LIMIT}&cursor=${encodeURIComponent(jobsListNextCursor)}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) {
+        const detail = (await res.text().catch(() => "")).trim();
+        setJobsListError(
+          `Could not load older jobs (HTTP ${res.status}).${detail ? ` ${detail.slice(0, 240)}` : ""}`,
+        );
+        return;
+      }
+      const json = (await res.json()) as CrawlJobListResponse;
+      const items = Array.isArray(json.items) ? (json.items as CrawlJobListItem[]) : [];
+      setJobsList((prev) => {
+        const seen = new Set(prev.map((j) => j.id));
+        const merged = [...prev];
+        for (const it of items) {
+          if (!seen.has(it.id)) merged.push(it);
+        }
+        return merged;
+      });
+      setJobsListNextCursor(typeof json.next_cursor === "string" && json.next_cursor ? json.next_cursor : null);
+    } catch (e) {
+      setJobsListError(describeFetchFailure(e, "Load older jobs"));
+    } finally {
+      setJobsListLoadingMore(false);
+    }
+  }, [jobsListLoading, jobsListLoadingMore, jobsListNextCursor]);
 
   useEffect(() => {
     void loadJobListForCompare();
@@ -1308,7 +1350,7 @@ export default function CrawlPage() {
             </div>
           </div>
           <p className="mt-2 text-xs text-zinc-500">
-            Remove individual jobs from the database (queue, audits, fetches for that job). The list matches the newest {JOB_LIST_LIMIT} jobs. Use{" "}
+            Remove individual jobs from the database (queue, audits, fetches for that job). Use{" "}
             <span className="font-medium">Filter jobs</span> in Phase 2 to narrow this list and the compare dropdowns. <span className="font-medium">View</span>{" "}
             loads that job into Status, reports, and Discovered URLs above.
           </p>
@@ -1411,6 +1453,18 @@ export default function CrawlPage() {
               </ul>
             )}
           </div>
+          {jobsListNextCursor ? (
+            <div className="mt-3">
+              <button
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                onClick={() => void loadMoreJobsForCompare()}
+                disabled={jobsListLoading || jobsListLoadingMore || jobDeleteBusy !== null}
+                type="button"
+              >
+                {jobsListLoadingMore ? "Loading…" : "Load older jobs"}
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white shadow-sm">
