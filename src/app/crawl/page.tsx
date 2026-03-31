@@ -718,6 +718,8 @@ export default function CrawlPage() {
     const sortKey = url.searchParams.get("csk");
     const sortDir = url.searchParams.get("csd");
     const expandedChangedOnly = url.searchParams.get("ceco");
+    const tablePage = url.searchParams.get("ctp");
+    const tablePageSize = url.searchParams.get("ctps");
     applyingCompareFiltersFromUrl.current = true;
     if (kind === "all" || kind === "changed" || kind === "new_in_b" || kind === "removed_in_a") {
       setCompareTableFilterKind(kind);
@@ -760,6 +762,12 @@ export default function CrawlPage() {
       setCompareExpandOnlyChangedFields(false);
     } else if (expandedChangedOnly === "1") {
       setCompareExpandOnlyChangedFields(true);
+    }
+    if (tablePageSize === "100" || tablePageSize === "200" || tablePageSize === "500") {
+      setCompareTablePageSize(Number(tablePageSize) as 100 | 200 | 500);
+    }
+    if (tablePage && Number.isFinite(Number(tablePage))) {
+      setCompareTablePage(Math.max(1, Math.floor(Number(tablePage))));
     }
     if (preset === "all" || preset === "status" || preset === "content" || preset === "technical" || preset === "performance") {
       setComparePreset(preset);
@@ -850,6 +858,10 @@ export default function CrawlPage() {
     else url.searchParams.delete("csd");
     if (!compareExpandOnlyChangedFields) url.searchParams.set("ceco", "0");
     else url.searchParams.delete("ceco");
+    if (compareTablePageSize !== 200) url.searchParams.set("ctps", String(compareTablePageSize));
+    else url.searchParams.delete("ctps");
+    if (compareTablePage > 1) url.searchParams.set("ctp", String(compareTablePage));
+    else url.searchParams.delete("ctp");
     const next = `${url.pathname}${url.search}${url.hash}`;
     if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
       window.history.replaceState({}, "", next);
@@ -860,6 +872,8 @@ export default function CrawlPage() {
     comparePreset,
     comparePresetIncludeNewRemoved,
     compareExpandOnlyChangedFields,
+    compareTablePage,
+    compareTablePageSize,
     compareSortDir,
     compareSortKey,
     compareTableFilterKind,
