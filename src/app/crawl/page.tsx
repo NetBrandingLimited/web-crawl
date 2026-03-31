@@ -27,6 +27,14 @@ function describeFetchFailure(err: unknown, what: string): string {
   return err instanceof Error ? err.message : "Request failed";
 }
 
+function escapeCsvCell(v: unknown): string {
+  const raw = String(v ?? "");
+  if (raw.includes('"') || raw.includes(",") || raw.includes("\n") || raw.includes("\r")) {
+    return `"${raw.replace(/"/g, "\"\"")}"`;
+  }
+  return raw;
+}
+
 type CrawlJobCreateResponse = {
   id: string;
   status: string;
@@ -1130,6 +1138,42 @@ export default function CrawlPage() {
     setCompareJobB("");
   }
 
+  function downloadFilteredComparePreviewCsv() {
+    if (!compareJobA || !compareJobB) {
+      setError("Choose baseline job (A) and compare job (B).");
+      return;
+    }
+    if (filteredCompareRows.length === 0) {
+      setError("No compare rows match the current filters.");
+      return;
+    }
+    const headers = ["change_kind", "changed_fields", "url", "http_status_a", "http_status_b", "title_a", "title_b"];
+    const lines = [headers.join(",")];
+    for (const r of filteredCompareRows) {
+      lines.push(
+        [
+          escapeCsvCell(r.change_kind),
+          escapeCsvCell(r.changed_fields),
+          escapeCsvCell(r.url),
+          escapeCsvCell(r.http_status_a),
+          escapeCsvCell(r.http_status_b),
+          escapeCsvCell(r.title_a),
+          escapeCsvCell(r.title_b),
+        ].join(","),
+      );
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = `crawl-compare-filtered-${compareJobA.slice(0, 8)}-${compareJobB.slice(0, 8)}.csv`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  }
+
   async function openJobInViewer(id: string): Promise<boolean> {
     setError(null);
     const res = await fetch(`/api/v1/crawl-jobs/${encodeURIComponent(id)}`, { cache: "no-store" });
@@ -1600,6 +1644,14 @@ export default function CrawlPage() {
                   Status changes only
                 </label>
                 <span className="text-xs text-zinc-500">{filteredCompareRows.length} row(s)</span>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => downloadFilteredComparePreviewCsv()}
+                  disabled={filteredCompareRows.length === 0}
+                >
+                  Download filtered preview CSV
+                </button>
               </div>
               <div className="max-h-64 overflow-auto">
                 {filteredCompareRows.length === 0 ? (
