@@ -98,6 +98,45 @@ const COMPARE_PRESET_FIELD_GROUPS: Record<Exclude<ComparePresetId, "all">, Compa
   performance: ["response_time_ms"],
 };
 
+/** Same column order as server compare CSV (`src/app/api/v1/crawl-jobs/compare/route.ts`). */
+const COMPARE_FULL_CSV_HEADERS = [
+  "change_kind",
+  "changed_fields",
+  "url",
+  "depth_a",
+  "depth_b",
+  "http_status_a",
+  "http_status_b",
+  "title_a",
+  "title_b",
+  "canonical_a",
+  "canonical_b",
+  "meta_description_a",
+  "meta_description_b",
+  "word_count_a",
+  "word_count_b",
+  "h1_text_a",
+  "h1_text_b",
+  "h1_count_a",
+  "h1_count_b",
+  "content_type_a",
+  "content_type_b",
+  "robots_meta_a",
+  "robots_meta_b",
+  "meta_refresh_a",
+  "meta_refresh_b",
+  "content_hash_a",
+  "content_hash_b",
+  "x_robots_tag_a",
+  "x_robots_tag_b",
+  "html_lang_a",
+  "html_lang_b",
+  "response_time_ms_a",
+  "response_time_ms_b",
+] as const;
+
+type CompareFullCsvHeader = (typeof COMPARE_FULL_CSV_HEADERS)[number];
+
 type CompareDiffRow = {
   change_kind: string;
   changed_fields: string;
@@ -106,7 +145,25 @@ type CompareDiffRow = {
   http_status_b: number | string;
   title_a: string;
   title_b: string;
+  /** All compare columns (strings) for full CSV export; keys match server CSV. */
+  fullRow: Record<CompareFullCsvHeader, string>;
 };
+
+function parseCompareApiRow(row: Record<string, unknown>): CompareDiffRow {
+  const fullRow = Object.fromEntries(
+    COMPARE_FULL_CSV_HEADERS.map((h) => [h, String(row[h] ?? "")]),
+  ) as Record<CompareFullCsvHeader, string>;
+  return {
+    change_kind: fullRow.change_kind,
+    changed_fields: fullRow.changed_fields,
+    url: fullRow.url,
+    http_status_a: (row.http_status_a as number | string | undefined) ?? "",
+    http_status_b: (row.http_status_b as number | string | undefined) ?? "",
+    title_a: fullRow.title_a,
+    title_b: fullRow.title_b,
+    fullRow,
+  };
+}
 
 type CrawlUrlsResponse = {
   items: Array<{
@@ -688,18 +745,7 @@ export default function CrawlPage() {
           const rawRows = Array.isArray(json.rows) ? json.rows : [];
           const rows = rawRows
             .filter((r) => typeof r === "object" && r !== null)
-            .map((r) => {
-              const row = r as Record<string, unknown>;
-              return {
-                change_kind: String(row.change_kind ?? ""),
-                changed_fields: String(row.changed_fields ?? ""),
-                url: String(row.url ?? ""),
-                http_status_a: (row.http_status_a as number | string | undefined) ?? "",
-                http_status_b: (row.http_status_b as number | string | undefined) ?? "",
-                title_a: String(row.title_a ?? ""),
-                title_b: String(row.title_b ?? ""),
-              } satisfies CompareDiffRow;
-            });
+            .map((r) => parseCompareApiRow(r as Record<string, unknown>));
           if (ac.signal.aborted) return;
           if (
             c &&
@@ -749,7 +795,7 @@ export default function CrawlPage() {
         if (!fields.includes("status")) return false;
       }
       if (!q) return true;
-      const blob = `${r.url}\n${r.changed_fields}\n${r.title_a}\n${r.title_b}\n${r.http_status_a}\n${r.http_status_b}`.toLowerCase();
+      const blob = COMPARE_FULL_CSV_HEADERS.map((h) => r.fullRow[h]).join("\n").toLowerCase();
       return blob.includes(q);
     });
   }, [
@@ -1139,6 +1185,7 @@ export default function CrawlPage() {
   }
 
   function downloadFilteredComparePreviewCsv() {
+    setError(null);
     if (!compareJobA || !compareJobB) {
       setError("Choose baseline job (A) and compare job (B).");
       return;
@@ -1167,6 +1214,32 @@ export default function CrawlPage() {
     const a = document.createElement("a");
     a.href = objectUrl;
     a.download = `crawl-compare-filtered-${compareJobA.slice(0, 8)}-${compareJobB.slice(0, 8)}.csv`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  function downloadFilteredCompareFullCsv() {
+    setError(null);
+    if (!compareJobA || !compareJobB) {
+      setError("Choose baseline job (A) and compare job (B).");
+      return;
+    }
+    if (filteredCompareRows.length === 0) {
+      setError("No compare rows match the current filters.");
+      return;
+    }
+    const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
+    for (const r of filteredCompareRows) {
+      lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(r.fullRow[h])).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = `crawl-compare-filtered-full-${compareJobA.slice(0, 8)}-${compareJobB.slice(0, 8)}.csv`;
     a.style.display = "none";
     document.body.appendChild(a);
     a.click();
@@ -1651,6 +1724,14 @@ export default function CrawlPage() {
                   disabled={filteredCompareRows.length === 0}
                 >
                   Download filtered preview CSV
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => downloadFilteredCompareFullCsv()}
+                  disabled={filteredCompareRows.length === 0}
+                >
+                  Download filtered full CSV
                 </button>
               </div>
               <div className="max-h-64 overflow-auto">
