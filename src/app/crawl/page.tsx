@@ -1032,6 +1032,15 @@ export default function CrawlPage() {
     const start = (compareTablePage - 1) * compareTablePageSize;
     return sortedFilteredCompareRows.slice(start, start + compareTablePageSize);
   }, [compareTablePage, compareTablePageSize, sortedFilteredCompareRows]);
+  const compareRemainingRows = useMemo(() => {
+    const total = compareDiffPreview?.totalDiffRows ?? 0;
+    const loaded = compareDiffPreview?.rows?.length ?? 0;
+    return Math.max(0, total - loaded);
+  }, [compareDiffPreview?.rows?.length, compareDiffPreview?.totalDiffRows]);
+  const compareEstimatedRemainingPages = useMemo(() => {
+    if (!compareDiffPreview?.nextCursor) return 0;
+    return Math.ceil(compareRemainingRows / COMPARE_DIFF_PAGE_LIMIT);
+  }, [compareDiffPreview?.nextCursor, compareRemainingRows]);
   const filteredCompareKindCounts = useMemo(() => {
     let changed = 0;
     let newInB = 0;
@@ -2188,6 +2197,13 @@ export default function CrawlPage() {
                     view).
                   </span>
                 ) : null}
+                {compareDiffPreview.nextCursor ? (
+                  <span className="text-zinc-500">
+                    Approx remaining: {compareRemainingRows} row(s), {compareEstimatedRemainingPages} page(s) at{" "}
+                    {COMPARE_DIFF_PAGE_LIMIT}/page.
+                  </span>
+                ) : null}
+                {compareAutoLoadAll ? <span className="text-zinc-700">Auto-load in progress…</span> : null}
                 {compareDiffPreview.nextCursor ? (
                   <button
                     type="button"
