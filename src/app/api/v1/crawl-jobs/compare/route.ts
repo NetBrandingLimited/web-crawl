@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -40,11 +41,32 @@ function auditsToMap(rows: AuditRow[]) {
   return m;
 }
 
+function parseCompareJsonCursor(raw: string | null): number | null {
+  if (raw == null || raw === "") return 0;
+  try {
+    const decoded = Buffer.from(raw, "base64url").toString("utf8");
+    const parsed = JSON.parse(decoded) as { o?: unknown };
+    const o = Number(parsed.o);
+    if (!Number.isFinite(o) || o < 0 || o > 50_000_000) return null;
+    return Math.floor(o);
+  } catch {
+    return null;
+  }
+}
+
+function encodeCompareJsonCursor(offset: number): string {
+  return Buffer.from(JSON.stringify({ o: offset }), "utf8").toString("base64url");
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const jobA = searchParams.get("a");
   const jobB = searchParams.get("b");
   const format = searchParams.get("format") === "json" ? "json" : "csv";
+  const rawLimit = Number(searchParams.get("limit") ?? "500");
+  const pageLimit = Math.min(2000, Math.max(1, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 500));
+  /** When absent, JSON returns the full diff in one response (e.g. downloads). Use `paginate=1` for paged previews. */
+  const jsonPaginated = searchParams.get("paginate") === "1" || searchParams.has("cursor");
 
   if (!jobA || !jobB) {
     return NextResponse.json({ error: "missing_params", message: "Provide query params a and b (crawl job ids)." }, { status: 400 });
@@ -270,17 +292,56 @@ export async function GET(req: Request) {
   });
 
   if (format === "json") {
+    const counts = {
+      new_in_b: rows.filter((r) => r.change_kind === "new_in_b").length,
+      removed_in_a: rows.filter((r) => r.change_kind === "removed_in_a").length,
+      changed: rows.filter((r) => r.change_kind === "changed").length,
+      pages_in_a: auditsA.length,
+      pages_in_b: auditsB.length,
+    };
+    const totalDiffRows = rows.length;
+
+    if (!jsonPaginated) {
+      return NextResponse.json({
+        job_a: jobA,
+        job_b: jobB,
+        counts,
+        total_diff_rows: totalDiffRows,
+        rows,
+        next_cursor: null,
+      });
+    }
+
+    const rawCursor = searchParams.get("cursor");
+    let offset = 0;
+    if (rawCursor) {
+      const parsedOffset = parseCompareJsonCursor(rawCursor);
+      if (parsedOffset === null) {
+        return NextResponse.json(
+          { error: "invalid_cursor", message: "Invalid cursor for compare pagination." },
+          { status: 400 },
+        );
+      }
+      offset = parsedOffset;
+    }
+    if (offset > totalDiffRows) {
+      return NextResponse.json(
+        { error: "cursor_out_of_range", message: "Cursor offset is beyond this compare result set." },
+        { status: 400 },
+      );
+    }
+    const pageRows = rows.slice(offset, offset + pageLimit);
+    const nextOffset = offset + pageRows.length;
+    const next_cursor = nextOffset < totalDiffRows ? encodeCompareJsonCursor(nextOffset) : null;
     return NextResponse.json({
       job_a: jobA,
       job_b: jobB,
-      counts: {
-        new_in_b: rows.filter((r) => r.change_kind === "new_in_b").length,
-        removed_in_a: rows.filter((r) => r.change_kind === "removed_in_a").length,
-        changed: rows.filter((r) => r.change_kind === "changed").length,
-        pages_in_a: auditsA.length,
-        pages_in_b: auditsB.length,
-      },
-      rows,
+      counts,
+      total_diff_rows: totalDiffRows,
+      limit: pageLimit,
+      offset,
+      rows: pageRows,
+      next_cursor,
     });
   }
 

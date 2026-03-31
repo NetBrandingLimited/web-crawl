@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const WORKER_STEPS_CAP = 4000;
 const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
+/** Page size for Phase 2 compare JSON (`paginate=1` on compare API). */
+const COMPARE_DIFF_PAGE_LIMIT = 500;
 const DEFAULT_MAX_DEPTH = 10;
 // Keep this close to the "about 500 URLs" target so the crawl doesn't explode.
 const DEFAULT_MAX_PAGES = 600;
@@ -549,8 +551,11 @@ export default function CrawlPage() {
   const [compareJobB, setCompareJobB] = useState<string>("");
   const [compareDiffPreview, setCompareDiffPreview] = useState<{
     loading: boolean;
+    loadingMore: boolean;
     counts: CompareDiffCounts | null;
     rows: CompareDiffRow[] | null;
+    nextCursor: string | null;
+    totalDiffRows: number | null;
   } | null>(null);
   const [compareTableFilterKind, setCompareTableFilterKind] = useState<"all" | CompareChangeKind>("all");
   const [compareTableFilterText, setCompareTableFilterText] = useState("");
@@ -808,12 +813,19 @@ export default function CrawlPage() {
       setCompareDiffPreview(null);
       return;
     }
-    setCompareDiffPreview({ loading: true, counts: null, rows: null });
+    setCompareDiffPreview({
+      loading: true,
+      loadingMore: false,
+      counts: null,
+      rows: null,
+      nextCursor: null,
+      totalDiffRows: null,
+    });
     const timeoutId = window.setTimeout(() => {
       comparePreviewAbortRef.current?.abort();
       const ac = new AbortController();
       comparePreviewAbortRef.current = ac;
-      const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json`;
+      const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json&paginate=1&limit=${COMPARE_DIFF_PAGE_LIMIT}`;
       void (async () => {
         try {
           const res = await fetch(u, { cache: "no-store", signal: ac.signal });
@@ -821,7 +833,12 @@ export default function CrawlPage() {
             if (!ac.signal.aborted) setCompareDiffPreview(null);
             return;
           }
-          const json = (await res.json()) as { counts?: CompareDiffCounts; rows?: unknown };
+          const json = (await res.json()) as {
+            counts?: CompareDiffCounts;
+            rows?: unknown;
+            next_cursor?: string | null;
+            total_diff_rows?: number;
+          };
           const c = json.counts;
           const rawRows = Array.isArray(json.rows) ? json.rows : [];
           const rows = rawRows
@@ -836,7 +853,16 @@ export default function CrawlPage() {
             typeof c.pages_in_a === "number" &&
             typeof c.pages_in_b === "number"
           ) {
-            setCompareDiffPreview({ loading: false, counts: c, rows });
+            const nextC = json.next_cursor;
+            const total = json.total_diff_rows;
+            setCompareDiffPreview({
+              loading: false,
+              loadingMore: false,
+              counts: c,
+              rows,
+              nextCursor: typeof nextC === "string" && nextC ? nextC : null,
+              totalDiffRows: typeof total === "number" ? total : rows.length,
+            });
           } else {
             setCompareDiffPreview(null);
           }
@@ -888,6 +914,58 @@ export default function CrawlPage() {
     compareTableFilterKind,
     compareTableFilterText,
   ]);
+
+  const loadMoreCompareDiffs = useCallback(() => {
+    if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
+    setCompareDiffPreview((p) => {
+      if (!p?.nextCursor || p.loadingMore || p.loading) return p;
+      const cursor = p.nextCursor;
+      void (async () => {
+        try {
+          const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json&paginate=1&limit=${COMPARE_DIFF_PAGE_LIMIT}&cursor=${encodeURIComponent(cursor)}`;
+          const res = await fetch(u, { cache: "no-store" });
+          if (!res.ok) {
+            setCompareDiffPreview((prev) => (prev ? { ...prev, loadingMore: false } : prev));
+            return;
+          }
+          const json = (await res.json()) as {
+            rows?: unknown;
+            next_cursor?: string | null;
+            total_diff_rows?: number;
+          };
+          const rawRows = Array.isArray(json.rows) ? json.rows : [];
+          const newRows = rawRows
+            .filter((r) => typeof r === "object" && r !== null)
+            .map((r) => parseCompareApiRow(r as Record<string, unknown>));
+          setCompareDiffPreview((prev) => {
+            if (!prev) return prev;
+            const base = prev.rows ?? [];
+            const seen = new Set(base.map((r) => `${r.change_kind}\t${r.url}`));
+            const merged = [...base];
+            for (const r of newRows) {
+              const k = `${r.change_kind}\t${r.url}`;
+              if (!seen.has(k)) {
+                seen.add(k);
+                merged.push(r);
+              }
+            }
+            const nextC = json.next_cursor;
+            const total = json.total_diff_rows;
+            return {
+              ...prev,
+              loadingMore: false,
+              rows: merged,
+              nextCursor: typeof nextC === "string" && nextC ? nextC : null,
+              totalDiffRows: typeof total === "number" ? total : prev.totalDiffRows,
+            };
+          });
+        } catch {
+          setCompareDiffPreview((prev) => (prev ? { ...prev, loadingMore: false } : prev));
+        }
+      })();
+      return { ...p, loadingMore: true };
+    });
+  }, [compareJobA, compareJobB]);
 
   function applyComparePreset(preset: ComparePresetId, includeNewRemoved = false) {
     setComparePreset(preset);
@@ -1825,6 +1903,32 @@ export default function CrawlPage() {
                 >
                   Download filtered full CSV
                 </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-600">
+                {compareDiffPreview.totalDiffRows != null ? (
+                  <span>
+                    Loaded {compareDiffPreview.rows?.length ?? 0} of {compareDiffPreview.totalDiffRows} diff rows (into this
+                    view).
+                  </span>
+                ) : null}
+                {compareDiffPreview.nextCursor ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+                    onClick={() => void loadMoreCompareDiffs()}
+                    disabled={compareDiffPreview.loadingMore}
+                  >
+                    {compareDiffPreview.loadingMore ? "Loading…" : "Load more diffs"}
+                  </button>
+                ) : compareDiffPreview.totalDiffRows != null &&
+                  (compareDiffPreview.rows?.length ?? 0) > 0 &&
+                  (compareDiffPreview.rows?.length ?? 0) >= compareDiffPreview.totalDiffRows ? (
+                  <span className="text-zinc-500">All diff rows loaded.</span>
+                ) : null}
+                <span className="text-zinc-500">
+                  Filtered CSV exports only include rows loaded here; use <span className="font-medium">Download compare CSV</span>{" "}
+                  for the complete diff.
+                </span>
               </div>
               <div className="max-h-64 overflow-auto">
                 {filteredCompareRows.length === 0 ? (
