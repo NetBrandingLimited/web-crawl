@@ -1369,12 +1369,6 @@ export default function CrawlPage() {
               Download compare JSON
             </button>
           </div>
-          <p className="mt-2 text-xs text-zinc-500">
-            API:{" "}
-            <span className="font-mono text-[11px]">
-              /api/v1/crawl-jobs/compare?a=…&b=…&format=csv|json
-            </span>
-          </p>
         </div>
 
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
