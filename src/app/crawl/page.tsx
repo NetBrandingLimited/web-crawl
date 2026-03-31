@@ -983,6 +983,7 @@ export default function CrawlPage() {
     });
     return rows;
   }, [filteredCompareRows, compareSortDir, compareSortKey]);
+  const visibleSortedCompareRows = useMemo(() => sortedFilteredCompareRows.slice(0, 200), [sortedFilteredCompareRows]);
 
   const loadMoreCompareDiffs = useCallback(() => {
     if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
@@ -1069,6 +1070,22 @@ export default function CrawlPage() {
       const n = new Set(prev);
       if (n.has(rowKey)) n.delete(rowKey);
       else n.add(rowKey);
+      return n;
+    });
+  }
+
+  function expandAllVisibleCompareRows() {
+    setExpandedCompareRowKeys((prev) => {
+      const n = new Set(prev);
+      for (const r of visibleSortedCompareRows) n.add(`${r.change_kind}\t${r.url}`);
+      return n;
+    });
+  }
+
+  function collapseAllVisibleCompareRows() {
+    setExpandedCompareRowKeys((prev) => {
+      const n = new Set(prev);
+      for (const r of visibleSortedCompareRows) n.delete(`${r.change_kind}\t${r.url}`);
       return n;
     });
   }
@@ -1976,6 +1993,22 @@ export default function CrawlPage() {
                   Status changes only
                 </label>
                 <span className="text-xs text-zinc-500">{filteredCompareRows.length} row(s)</span>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => expandAllVisibleCompareRows()}
+                  disabled={visibleSortedCompareRows.length === 0}
+                >
+                  Expand visible
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => collapseAllVisibleCompareRows()}
+                  disabled={visibleSortedCompareRows.length === 0}
+                >
+                  Collapse visible
+                </button>
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
                   value={compareSortKey}
@@ -2098,7 +2131,7 @@ export default function CrawlPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
-                      {sortedFilteredCompareRows.slice(0, 200).map((r, i) => {
+                      {visibleSortedCompareRows.map((r, i) => {
                         const rowKey = `${r.change_kind}\t${r.url}`;
                         const open = expandedCompareRowKeys.has(rowKey);
                         return (
