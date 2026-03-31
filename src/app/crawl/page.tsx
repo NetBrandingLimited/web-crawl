@@ -2100,7 +2100,17 @@ export default function CrawlPage() {
                 </span>
               </div>
               {compareLoadMoreError ? (
-                <div className="border-b border-zinc-100 px-3 py-2 text-xs text-red-600">{compareLoadMoreError}</div>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2 text-xs text-red-600">
+                  <span>{compareLoadMoreError}</span>
+                  <button
+                    type="button"
+                    className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    onClick={() => void loadMoreCompareDiffs()}
+                    disabled={compareDiffPreview.loadingMore || !compareDiffPreview.nextCursor}
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : null}
               <div className="max-h-64 overflow-auto">
                 {filteredCompareRows.length === 0 ? (
