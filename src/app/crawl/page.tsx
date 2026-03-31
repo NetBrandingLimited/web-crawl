@@ -2192,6 +2192,34 @@ export default function CrawlPage() {
                   for the complete diff.
                 </span>
               </div>
+              {compareDiffPreview.totalDiffRows != null && compareDiffPreview.totalDiffRows > 0 ? (
+                <div className="border-b border-zinc-100 px-3 py-2">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                    <span>Diff load progress</span>
+                    <span>
+                      {Math.min(
+                        100,
+                        Math.round(((compareDiffPreview.rows?.length ?? 0) / compareDiffPreview.totalDiffRows) * 100),
+                      )}
+                      %
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-zinc-100">
+                    <div
+                      className="h-full bg-zinc-700 transition-all"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            Math.round(((compareDiffPreview.rows?.length ?? 0) / compareDiffPreview.totalDiffRows) * 100),
+                          ),
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
               {compareLoadMoreError ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2 text-xs text-red-600">
                   <span>{compareLoadMoreError}</span>
