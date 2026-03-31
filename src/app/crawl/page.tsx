@@ -696,6 +696,11 @@ export default function CrawlPage() {
     if (filteredJobsDirectory.length === 0) return false;
     return filteredJobsDirectory.every((j) => selectedJobIds.includes(j.id));
   }, [filteredJobsDirectory, selectedJobIds]);
+  const searchingOlderJobsForUrlCompare = useMemo(() => {
+    const pending = pendingCompareFromUrlRef.current;
+    if (!pending) return false;
+    return Boolean(jobsListNextCursor) && (jobsListLoadingMore || jobsListLoading);
+  }, [jobsListLoading, jobsListLoadingMore, jobsListNextCursor, jobsList.length]);
 
   const summary = useMemo(() => {
     if (!status) return null;
@@ -1252,6 +1257,11 @@ export default function CrawlPage() {
             hash, X-Robots-Tag, HTML <span className="font-mono">lang</span>, response time). With two jobs selected, this page updates the URL with{" "}
             <span className="font-mono">compareA</span> / <span className="font-mono">compareB</span> so you can bookmark or share the pair.
           </p>
+          {searchingOlderJobsForUrlCompare ? (
+            <div className="mt-2 text-xs text-zinc-500">
+              Searching older jobs to resolve URL compare pair…
+            </div>
+          ) : null}
           {jobsListError ? <div className="mt-2 text-sm text-red-600">{jobsListError}</div> : null}
           {!jobsListError && !jobsListLoading && jobsList.length === 0 ? (
             <div className="mt-2 text-xs text-zinc-500">No crawl jobs returned. Start a crawl above, or check the database connection.</div>
