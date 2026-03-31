@@ -64,6 +64,16 @@ type CompareDiffCounts = {
   pages_in_a: number;
   pages_in_b: number;
 };
+type CompareChangeKind = "new_in_b" | "removed_in_a" | "changed";
+type CompareDiffRow = {
+  change_kind: string;
+  changed_fields: string;
+  url: string;
+  http_status_a: number | string;
+  http_status_b: number | string;
+  title_a: string;
+  title_b: string;
+};
 
 type CrawlUrlsResponse = {
   items: Array<{
@@ -450,7 +460,10 @@ export default function CrawlPage() {
   const [compareDiffPreview, setCompareDiffPreview] = useState<{
     loading: boolean;
     counts: CompareDiffCounts | null;
+    rows: CompareDiffRow[] | null;
   } | null>(null);
+  const [compareTableFilterKind, setCompareTableFilterKind] = useState<"all" | CompareChangeKind>("all");
+  const [compareTableFilterText, setCompareTableFilterText] = useState("");
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
   const pendingCompareFromUrlRef = useRef<{ a: string; b: string } | null>(null);
@@ -618,7 +631,7 @@ export default function CrawlPage() {
       setCompareDiffPreview(null);
       return;
     }
-    setCompareDiffPreview({ loading: true, counts: null });
+    setCompareDiffPreview({ loading: true, counts: null, rows: null });
     const timeoutId = window.setTimeout(() => {
       comparePreviewAbortRef.current?.abort();
       const ac = new AbortController();
@@ -631,8 +644,23 @@ export default function CrawlPage() {
             if (!ac.signal.aborted) setCompareDiffPreview(null);
             return;
           }
-          const json = (await res.json()) as { counts?: CompareDiffCounts };
+          const json = (await res.json()) as { counts?: CompareDiffCounts; rows?: unknown };
           const c = json.counts;
+          const rawRows = Array.isArray(json.rows) ? json.rows : [];
+          const rows = rawRows
+            .filter((r) => typeof r === "object" && r !== null)
+            .map((r) => {
+              const row = r as Record<string, unknown>;
+              return {
+                change_kind: String(row.change_kind ?? ""),
+                changed_fields: String(row.changed_fields ?? ""),
+                url: String(row.url ?? ""),
+                http_status_a: (row.http_status_a as number | string | undefined) ?? "",
+                http_status_b: (row.http_status_b as number | string | undefined) ?? "",
+                title_a: String(row.title_a ?? ""),
+                title_b: String(row.title_b ?? ""),
+              } satisfies CompareDiffRow;
+            });
           if (ac.signal.aborted) return;
           if (
             c &&
@@ -642,7 +670,7 @@ export default function CrawlPage() {
             typeof c.pages_in_a === "number" &&
             typeof c.pages_in_b === "number"
           ) {
-            setCompareDiffPreview({ loading: false, counts: c });
+            setCompareDiffPreview({ loading: false, counts: c, rows });
           } else {
             setCompareDiffPreview(null);
           }
@@ -658,6 +686,18 @@ export default function CrawlPage() {
       comparePreviewAbortRef.current = null;
     };
   }, [compareJobA, compareJobB]);
+
+  const filteredCompareRows = useMemo(() => {
+    const rows = compareDiffPreview?.rows ?? [];
+    const kind = compareTableFilterKind;
+    const q = compareTableFilterText.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (kind !== "all" && r.change_kind !== kind) return false;
+      if (!q) return true;
+      const blob = `${r.url}\n${r.changed_fields}\n${r.title_a}\n${r.title_b}\n${r.http_status_a}\n${r.http_status_b}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [compareDiffPreview?.rows, compareTableFilterKind, compareTableFilterText]);
 
   useEffect(() => {
     setUrlTableFilter("");
@@ -1348,6 +1388,63 @@ export default function CrawlPage() {
                   <span className="font-medium">Diff summary:</span> {compareDiffPreview.counts.new_in_b} new in B,{" "}
                   {compareDiffPreview.counts.removed_in_a} removed since A, {compareDiffPreview.counts.changed} changed on same URLs.
                 </>
+              ) : null}
+            </div>
+          ) : null}
+          {compareDiffPreview && !compareDiffPreview.loading && compareDiffPreview.rows ? (
+            <div className="mt-4 rounded-lg border border-zinc-100">
+              <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2">
+                <select
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  value={compareTableFilterKind}
+                  onChange={(e) => setCompareTableFilterKind(e.target.value as "all" | CompareChangeKind)}
+                >
+                  <option value="all">All change kinds</option>
+                  <option value="changed">changed</option>
+                  <option value="new_in_b">new_in_b</option>
+                  <option value="removed_in_a">removed_in_a</option>
+                </select>
+                <input
+                  className="min-w-[14rem] flex-1 rounded-md border border-zinc-200 px-2 py-1 text-xs"
+                  value={compareTableFilterText}
+                  onChange={(e) => setCompareTableFilterText(e.target.value)}
+                  placeholder="Filter diff rows by URL/title/status/fields…"
+                  type="search"
+                />
+                <span className="text-xs text-zinc-500">{filteredCompareRows.length} row(s)</span>
+              </div>
+              <div className="max-h-64 overflow-auto">
+                {filteredCompareRows.length === 0 ? (
+                  <div className="px-3 py-4 text-xs text-zinc-500">No compare rows match the current filters.</div>
+                ) : (
+                  <table className="min-w-full text-left text-xs">
+                    <thead className="bg-zinc-50 text-zinc-500">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Kind</th>
+                        <th className="px-3 py-2 font-medium">URL</th>
+                        <th className="px-3 py-2 font-medium">Changed fields</th>
+                        <th className="px-3 py-2 font-medium">Status A/B</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {filteredCompareRows.slice(0, 200).map((r, i) => (
+                        <tr key={`${r.change_kind}:${r.url}:${i}`}>
+                          <td className="px-3 py-2 font-mono">{r.change_kind}</td>
+                          <td className="max-w-[38rem] truncate px-3 py-2 font-mono">{r.url}</td>
+                          <td className="px-3 py-2">{r.changed_fields || "-"}</td>
+                          <td className="px-3 py-2">
+                            {String(r.http_status_a || "-")} / {String(r.http_status_b || "-")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              {filteredCompareRows.length > 200 ? (
+                <div className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
+                  Showing first 200 rows. Narrow filters to inspect specific diffs.
+                </div>
               ) : null}
             </div>
           ) : null}
