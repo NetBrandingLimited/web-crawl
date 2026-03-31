@@ -493,6 +493,7 @@ export default function CrawlPage() {
   const [compareFieldFilter, setCompareFieldFilter] = useState<"all" | CompareChangedField>("all");
   /** When set, row must include at least one of these in `changed_fields` (presets). Manual single-field uses `compareFieldFilter` instead. */
   const [compareFieldAnyOf, setCompareFieldAnyOf] = useState<CompareChangedField[] | null>(null);
+  const [comparePresetIncludeNewRemoved, setComparePresetIncludeNewRemoved] = useState(false);
   const [comparePreset, setComparePreset] = useState<ComparePresetId>("all");
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
@@ -728,8 +729,11 @@ export default function CrawlPage() {
         .map((f) => f.trim())
         .filter(Boolean);
       if (compareFieldAnyOf && compareFieldAnyOf.length > 0) {
-        if (r.change_kind !== "changed") return false;
-        if (!compareFieldAnyOf.some((f) => fields.includes(f))) return false;
+        if (r.change_kind === "changed") {
+          if (!compareFieldAnyOf.some((f) => fields.includes(f))) return false;
+        } else if (!comparePresetIncludeNewRemoved) {
+          return false;
+        }
       } else if (compareFieldFilter !== "all" && !fields.includes(compareFieldFilter)) {
         return false;
       }
@@ -742,6 +746,7 @@ export default function CrawlPage() {
     });
   }, [
     compareDiffPreview?.rows,
+    comparePresetIncludeNewRemoved,
     compareFieldAnyOf,
     compareFieldFilter,
     compareOnlyStatusChanges,
@@ -756,6 +761,7 @@ export default function CrawlPage() {
       setCompareFieldFilter("all");
       setCompareFieldAnyOf(null);
       setCompareOnlyStatusChanges(false);
+      setComparePresetIncludeNewRemoved(false);
       return;
     }
     setCompareTableFilterKind("changed");
@@ -1484,12 +1490,26 @@ export default function CrawlPage() {
               <p className="border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-500">
                 Presets show <span className="font-mono">changed</span> rows where <span className="font-medium">any</span> of the preset’s fields
                 appears in <span className="font-mono">changed_fields</span> (new/removed URLs stay hidden until you pick{" "}
-                <span className="font-mono">All</span> preset or <span className="font-mono">All change kinds</span>).
+                <span className="font-mono">All</span> preset, <span className="font-mono">All change kinds</span>, or enable{" "}
+                <span className="font-mono">Include new/removed</span>).
               </p>
               {compareFieldAnyOf && compareFieldAnyOf.length > 0 ? (
-                <div className="border-b border-zinc-100 px-3 py-1.5 text-[11px] text-zinc-600">
-                  <span className="font-medium">Preset fields (any of):</span>{" "}
-                  <span className="font-mono">{compareFieldAnyOf.join(", ")}</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-3 py-1.5 text-[11px] text-zinc-600">
+                  <div>
+                    <span className="font-medium">Preset fields (any of):</span>{" "}
+                    <span className="font-mono">{compareFieldAnyOf.join(", ")}</span>
+                  </div>
+                  <label className="inline-flex items-center gap-1 text-xs text-zinc-700">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 rounded border-zinc-300"
+                      checked={comparePresetIncludeNewRemoved}
+                      onChange={(e) => {
+                        setComparePresetIncludeNewRemoved(e.target.checked);
+                      }}
+                    />
+                    Include new/removed
+                  </label>
                 </div>
               ) : null}
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2">
