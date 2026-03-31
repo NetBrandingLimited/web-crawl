@@ -1153,6 +1153,15 @@ export default function CrawlPage() {
     });
   }
 
+  function goToComparePageFromInput() {
+    const n = Number(comparePageJumpInput);
+    if (!Number.isFinite(n) || n < 1) {
+      setCompareTablePage(1);
+      return;
+    }
+    setCompareTablePage(Math.min(compareTableTotalPages, Math.floor(n)));
+  }
+
   useEffect(() => {
     setUrlTableFilter("");
   }, [jobId]);
@@ -2346,6 +2355,14 @@ export default function CrawlPage() {
                   {sortedFilteredCompareRows.length} filtered row(s).
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    onClick={() => setCompareTablePage(1)}
+                    disabled={compareTablePage <= 1}
+                  >
+                    First
+                  </button>
                   <label className="inline-flex items-center gap-1">
                     <span className="text-zinc-500">Go to</span>
                     <input
@@ -2356,15 +2373,18 @@ export default function CrawlPage() {
                       onChange={(e) => setComparePageJumpInput(e.target.value.replace(/[^0-9]/g, ""))}
                       onKeyDown={(e) => {
                         if (e.key !== "Enter") return;
-                        const n = Number(comparePageJumpInput);
-                        if (!Number.isFinite(n) || n < 1) {
-                          setCompareTablePage(1);
-                          return;
-                        }
-                        setCompareTablePage(Math.min(compareTableTotalPages, Math.floor(n)));
+                        goToComparePageFromInput();
                       }}
                     />
                   </label>
+                  <button
+                    type="button"
+                    className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    onClick={() => goToComparePageFromInput()}
+                    disabled={sortedFilteredCompareRows.length === 0}
+                  >
+                    Go
+                  </button>
                   <button
                     type="button"
                     className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
@@ -2380,6 +2400,14 @@ export default function CrawlPage() {
                     disabled={compareTablePage >= compareTableTotalPages}
                   >
                     Next
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    onClick={() => setCompareTablePage(compareTableTotalPages)}
+                    disabled={compareTablePage >= compareTableTotalPages}
+                  >
+                    Last
                   </button>
                 </div>
               </div>
