@@ -65,6 +65,21 @@ type CompareDiffCounts = {
   pages_in_b: number;
 };
 type CompareChangeKind = "new_in_b" | "removed_in_a" | "changed";
+type CompareChangedField =
+  | "status"
+  | "title"
+  | "canonical"
+  | "meta_description"
+  | "word_count"
+  | "h1_text"
+  | "h1_count"
+  | "content_type"
+  | "robots_meta"
+  | "meta_refresh"
+  | "content_hash"
+  | "x_robots_tag"
+  | "html_lang"
+  | "response_time_ms";
 type CompareDiffRow = {
   change_kind: string;
   changed_fields: string;
@@ -465,6 +480,7 @@ export default function CrawlPage() {
   const [compareTableFilterKind, setCompareTableFilterKind] = useState<"all" | CompareChangeKind>("all");
   const [compareTableFilterText, setCompareTableFilterText] = useState("");
   const [compareOnlyStatusChanges, setCompareOnlyStatusChanges] = useState(false);
+  const [compareFieldFilter, setCompareFieldFilter] = useState<"all" | CompareChangedField>("all");
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
   const pendingCompareFromUrlRef = useRef<{ a: string; b: string } | null>(null);
@@ -694,18 +710,19 @@ export default function CrawlPage() {
     const q = compareTableFilterText.trim().toLowerCase();
     return rows.filter((r) => {
       if (kind !== "all" && r.change_kind !== kind) return false;
+      const fields = r.changed_fields
+        .split("|")
+        .map((f) => f.trim())
+        .filter(Boolean);
+      if (compareFieldFilter !== "all" && !fields.includes(compareFieldFilter)) return false;
       if (compareOnlyStatusChanges) {
-        const fields = r.changed_fields
-          .split("|")
-          .map((f) => f.trim())
-          .filter(Boolean);
         if (!fields.includes("status")) return false;
       }
       if (!q) return true;
       const blob = `${r.url}\n${r.changed_fields}\n${r.title_a}\n${r.title_b}\n${r.http_status_a}\n${r.http_status_b}`.toLowerCase();
       return blob.includes(q);
     });
-  }, [compareDiffPreview?.rows, compareOnlyStatusChanges, compareTableFilterKind, compareTableFilterText]);
+  }, [compareDiffPreview?.rows, compareFieldFilter, compareOnlyStatusChanges, compareTableFilterKind, compareTableFilterText]);
 
   useEffect(() => {
     setUrlTableFilter("");
@@ -1419,6 +1436,27 @@ export default function CrawlPage() {
                   placeholder="Filter diff rows by URL/title/status/fields…"
                   type="search"
                 />
+                <select
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  value={compareFieldFilter}
+                  onChange={(e) => setCompareFieldFilter(e.target.value as "all" | CompareChangedField)}
+                >
+                  <option value="all">All fields</option>
+                  <option value="status">status</option>
+                  <option value="title">title</option>
+                  <option value="canonical">canonical</option>
+                  <option value="meta_description">meta_description</option>
+                  <option value="word_count">word_count</option>
+                  <option value="h1_text">h1_text</option>
+                  <option value="h1_count">h1_count</option>
+                  <option value="content_type">content_type</option>
+                  <option value="robots_meta">robots_meta</option>
+                  <option value="meta_refresh">meta_refresh</option>
+                  <option value="content_hash">content_hash</option>
+                  <option value="x_robots_tag">x_robots_tag</option>
+                  <option value="html_lang">html_lang</option>
+                  <option value="response_time_ms">response_time_ms</option>
+                </select>
                 <label className="inline-flex items-center gap-1 text-xs text-zinc-700">
                   <input
                     type="checkbox"
