@@ -591,6 +591,7 @@ export default function CrawlPage() {
   const [compareSortKey, setCompareSortKey] = useState<CompareSortKey>("kind");
   const [compareSortDir, setCompareSortDir] = useState<"asc" | "desc">("asc");
   const [expandedCompareRowKeys, setExpandedCompareRowKeys] = useState<Set<string>>(() => new Set());
+  const [compareExpandOnlyChangedFields, setCompareExpandOnlyChangedFields] = useState(true);
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
   const [compareLoadMoreError, setCompareLoadMoreError] = useState<string | null>(null);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
@@ -1479,6 +1480,7 @@ export default function CrawlPage() {
     setComparePreset("all");
     setCompareSortKey("kind");
     setCompareSortDir("asc");
+    setCompareExpandOnlyChangedFields(true);
     setExpandedCompareRowKeys(new Set());
   }
 
@@ -2058,6 +2060,15 @@ export default function CrawlPage() {
                 >
                   Reset view
                 </button>
+                <label className="inline-flex items-center gap-1 text-xs text-zinc-700">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded border-zinc-300"
+                    checked={compareExpandOnlyChangedFields}
+                    onChange={(e) => setCompareExpandOnlyChangedFields(e.target.checked)}
+                  />
+                  Expanded: changed fields only
+                </label>
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
                   value={compareSortKey}
@@ -2246,6 +2257,7 @@ export default function CrawlPage() {
                                       const va = r.fullRow[p.a];
                                       const vb = r.fullRow[p.b];
                                       const diff = va !== vb;
+                                      if (compareExpandOnlyChangedFields && !diff) return null;
                                       return (
                                         <Fragment key={p.label}>
                                           <div className={`py-0.5 font-medium ${diff ? "text-zinc-900" : "text-zinc-500"}`}>
