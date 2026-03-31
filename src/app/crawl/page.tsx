@@ -91,6 +91,7 @@ type CompareChangedField =
   | "html_lang"
   | "response_time_ms";
 type ComparePresetId = "all" | "status" | "content" | "technical" | "performance";
+type CompareSortKey = "kind" | "url" | "fields" | "status_a" | "status_b";
 
 /** Fields used by quick presets (any match in `changed_fields` counts). */
 const COMPARE_PRESET_FIELD_GROUPS: Record<Exclude<ComparePresetId, "all">, CompareChangedField[]> = {
@@ -565,6 +566,8 @@ export default function CrawlPage() {
   const [compareFieldAnyOf, setCompareFieldAnyOf] = useState<CompareChangedField[] | null>(null);
   const [comparePresetIncludeNewRemoved, setComparePresetIncludeNewRemoved] = useState(false);
   const [comparePreset, setComparePreset] = useState<ComparePresetId>("all");
+  const [compareSortKey, setCompareSortKey] = useState<CompareSortKey>("kind");
+  const [compareSortDir, setCompareSortDir] = useState<"asc" | "desc">("asc");
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
@@ -914,6 +917,25 @@ export default function CrawlPage() {
     compareTableFilterKind,
     compareTableFilterText,
   ]);
+
+  const sortedFilteredCompareRows = useMemo(() => {
+    const rows = [...filteredCompareRows];
+    const dir = compareSortDir === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      const val = (r: CompareDiffRow): string | number => {
+        if (compareSortKey === "kind") return r.change_kind;
+        if (compareSortKey === "url") return r.url;
+        if (compareSortKey === "fields") return r.changed_fields;
+        if (compareSortKey === "status_a") return Number(r.http_status_a || 0);
+        return Number(r.http_status_b || 0);
+      };
+      const av = val(a);
+      const bv = val(b);
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+    return rows;
+  }, [filteredCompareRows, compareSortDir, compareSortKey]);
 
   const loadMoreCompareDiffs = useCallback(() => {
     if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
@@ -1887,6 +1909,24 @@ export default function CrawlPage() {
                   Status changes only
                 </label>
                 <span className="text-xs text-zinc-500">{filteredCompareRows.length} row(s)</span>
+                <select
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  value={compareSortKey}
+                  onChange={(e) => setCompareSortKey(e.target.value as CompareSortKey)}
+                >
+                  <option value="kind">Sort: kind</option>
+                  <option value="url">Sort: URL</option>
+                  <option value="fields">Sort: changed fields</option>
+                  <option value="status_a">Sort: status A</option>
+                  <option value="status_b">Sort: status B</option>
+                </select>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"
+                  onClick={() => setCompareSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                >
+                  {compareSortDir === "asc" ? "Asc" : "Desc"}
+                </button>
                 <button
                   type="button"
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
@@ -1944,7 +1984,7 @@ export default function CrawlPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
-                      {filteredCompareRows.slice(0, 200).map((r, i) => (
+                      {sortedFilteredCompareRows.slice(0, 200).map((r, i) => (
                         <tr key={`${r.change_kind}:${r.url}:${i}`}>
                           <td className="px-3 py-2 font-mono">{r.change_kind}</td>
                           <td className="max-w-[38rem] truncate px-3 py-2 font-mono">{r.url}</td>
@@ -1977,7 +2017,7 @@ export default function CrawlPage() {
                   </table>
                 )}
               </div>
-              {filteredCompareRows.length > 200 ? (
+              {sortedFilteredCompareRows.length > 200 ? (
                 <div className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
                   Showing first 200 rows. Narrow filters to inspect specific diffs.
                 </div>
