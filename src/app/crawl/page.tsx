@@ -597,6 +597,7 @@ export default function CrawlPage() {
   const [compareExpandOnlyChangedFields, setCompareExpandOnlyChangedFields] = useState(true);
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
   const [compareLoadMoreError, setCompareLoadMoreError] = useState<string | null>(null);
+  const [compareAutoLoadAll, setCompareAutoLoadAll] = useState(false);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
   const applyingCompareFiltersFromUrl = useRef(false);
@@ -886,6 +887,7 @@ export default function CrawlPage() {
       comparePreviewAbortRef.current = null;
       setCompareDiffPreview(null);
       setCompareLoadMoreError(null);
+      setCompareAutoLoadAll(false);
       return;
     }
     setCompareLoadMoreError(null);
@@ -1099,6 +1101,19 @@ export default function CrawlPage() {
       return { ...p, loadingMore: true };
     });
   }, [compareJobA, compareJobB]);
+
+  useEffect(() => {
+    if (!compareAutoLoadAll) return;
+    if (!compareDiffPreview || compareDiffPreview.loading || compareDiffPreview.loadingMore) return;
+    if (!compareDiffPreview.nextCursor) {
+      setCompareAutoLoadAll(false);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      loadMoreCompareDiffs();
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [compareAutoLoadAll, compareDiffPreview, loadMoreCompareDiffs]);
 
   function applyComparePreset(preset: ComparePresetId, includeNewRemoved = false) {
     setComparePreset(preset);
@@ -2186,6 +2201,16 @@ export default function CrawlPage() {
                   (compareDiffPreview.rows?.length ?? 0) > 0 &&
                   (compareDiffPreview.rows?.length ?? 0) >= compareDiffPreview.totalDiffRows ? (
                   <span className="text-zinc-500">All diff rows loaded.</span>
+                ) : null}
+                {compareDiffPreview.nextCursor ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+                    onClick={() => setCompareAutoLoadAll((v) => !v)}
+                    disabled={compareDiffPreview.loadingMore}
+                  >
+                    {compareAutoLoadAll ? "Stop auto-load" : "Auto-load all"}
+                  </button>
                 ) : null}
                 <span className="text-zinc-500">
                   Filtered CSV exports only include rows loaded here; use <span className="font-medium">Download compare CSV</span>{" "}
