@@ -1006,6 +1006,17 @@ export default function CrawlPage() {
     setComparePresetIncludeNewRemoved(includeNewRemoved);
   }
 
+  function setCompareSortFromHeader(nextKey: CompareSortKey) {
+    setCompareSortKey((prev) => {
+      if (prev === nextKey) {
+        setCompareSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setCompareSortDir("asc");
+      return nextKey;
+    });
+  }
+
   useEffect(() => {
     setUrlTableFilter("");
   }, [jobId]);
@@ -1977,10 +1988,52 @@ export default function CrawlPage() {
                   <table className="min-w-full text-left text-xs">
                     <thead className="bg-zinc-50 text-zinc-500">
                       <tr>
-                        <th className="px-3 py-2 font-medium">Kind</th>
-                        <th className="px-3 py-2 font-medium">URL</th>
-                        <th className="px-3 py-2 font-medium">Changed fields</th>
-                        <th className="px-3 py-2 font-medium">Status A/B</th>
+                        <th className="px-3 py-2 font-medium">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 hover:text-zinc-700"
+                            onClick={() => setCompareSortFromHeader("kind")}
+                          >
+                            Kind {compareSortKey === "kind" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
+                          </button>
+                        </th>
+                        <th className="px-3 py-2 font-medium">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 hover:text-zinc-700"
+                            onClick={() => setCompareSortFromHeader("url")}
+                          >
+                            URL {compareSortKey === "url" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
+                          </button>
+                        </th>
+                        <th className="px-3 py-2 font-medium">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 hover:text-zinc-700"
+                            onClick={() => setCompareSortFromHeader("fields")}
+                          >
+                            Changed fields {compareSortKey === "fields" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
+                          </button>
+                        </th>
+                        <th className="px-3 py-2 font-medium">
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 hover:text-zinc-700"
+                              onClick={() => setCompareSortFromHeader("status_a")}
+                            >
+                              Status A {compareSortKey === "status_a" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
+                            </button>
+                            <span>/</span>
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 hover:text-zinc-700"
+                              onClick={() => setCompareSortFromHeader("status_b")}
+                            >
+                              B {compareSortKey === "status_b" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
+                            </button>
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
