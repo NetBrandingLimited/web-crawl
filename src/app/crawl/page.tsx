@@ -1585,6 +1585,17 @@ export default function CrawlPage() {
     setExpandedCompareRowKeys(new Set());
   }
 
+  function clearCompareActiveFilters() {
+    setCompareTableFilterKind("all");
+    setCompareFieldFilter("all");
+    setCompareTableFilterText("");
+    setCompareOnlyStatusChanges(false);
+    setComparePreset("all");
+    setCompareFieldAnyOf(null);
+    setComparePresetIncludeNewRemoved(false);
+    setCompareTablePage(1);
+  }
+
   function downloadFilteredComparePreviewCsv() {
     setError(null);
     if (!compareJobA || !compareJobB) {
@@ -2077,6 +2088,13 @@ export default function CrawlPage() {
                 !compareExpandOnlyChangedFields) ? (
                 <div className="flex flex-wrap items-center gap-1.5 border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-600">
                   <span className="mr-1 text-zinc-500">Active:</span>
+                  <button
+                    type="button"
+                    className="rounded-md border border-zinc-300 bg-white px-1.5 py-0.5 text-zinc-700 hover:bg-zinc-50"
+                    onClick={() => clearCompareActiveFilters()}
+                  >
+                    Clear filters
+                  </button>
                   {compareTableFilterKind !== "all" ? (
                     <button
                       type="button"
