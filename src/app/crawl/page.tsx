@@ -599,6 +599,7 @@ export default function CrawlPage() {
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
   const [compareLoadMoreError, setCompareLoadMoreError] = useState<string | null>(null);
   const [compareAutoLoadAll, setCompareAutoLoadAll] = useState(false);
+  const [compareExportAfterAutoLoad, setCompareExportAfterAutoLoad] = useState(false);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
   const applyingCompareFromUrl = useRef(false);
   const applyingCompareFiltersFromUrl = useRef(false);
@@ -897,6 +898,7 @@ export default function CrawlPage() {
       setCompareDiffPreview(null);
       setCompareLoadMoreError(null);
       setCompareAutoLoadAll(false);
+      setCompareExportAfterAutoLoad(false);
       return;
     }
     setCompareLoadMoreError(null);
@@ -1132,6 +1134,24 @@ export default function CrawlPage() {
     }, 120);
     return () => window.clearTimeout(t);
   }, [compareAutoLoadAll, compareDiffPreview, loadMoreCompareDiffs]);
+
+  useEffect(() => {
+    if (!compareExportAfterAutoLoad) return;
+    if (!compareDiffPreview || compareDiffPreview.loading || compareDiffPreview.loadingMore) return;
+    if (compareDiffPreview.nextCursor) {
+      if (!compareAutoLoadAll) setCompareAutoLoadAll(true);
+      return;
+    }
+    if (filteredCompareRows.length === 0) {
+      setCompareExportAfterAutoLoad(false);
+      setCompareAutoLoadAll(false);
+      setError("No compare rows match the current filters.");
+      return;
+    }
+    downloadFilteredCompareFullCsv();
+    setCompareExportAfterAutoLoad(false);
+    setCompareAutoLoadAll(false);
+  }, [compareAutoLoadAll, compareDiffPreview, compareExportAfterAutoLoad, filteredCompareRows.length]);
 
   function applyComparePreset(preset: ComparePresetId, includeNewRemoved = false) {
     setComparePreset(preset);
@@ -1699,6 +1719,16 @@ export default function CrawlPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(objectUrl);
+  }
+
+  function autoLoadAllAndExportFilteredCsv() {
+    setError(null);
+    if (!compareJobA || !compareJobB || compareJobA === compareJobB) {
+      setError("Choose baseline job (A) and compare job (B).");
+      return;
+    }
+    setCompareExportAfterAutoLoad(true);
+    if (compareDiffPreview?.nextCursor) setCompareAutoLoadAll(true);
   }
 
   async function copyCompareDeepLink() {
@@ -2437,6 +2467,14 @@ export default function CrawlPage() {
                   disabled={visibleSortedCompareRows.length === 0}
                 >
                   Download current page CSV
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => autoLoadAllAndExportFilteredCsv()}
+                  disabled={!compareJobA || !compareJobB || compareJobA === compareJobB || compareDiffPreview.loading}
+                >
+                  {compareExportAfterAutoLoad ? "Auto-load + export pending…" : "Auto-load all + export filtered CSV"}
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-600">
