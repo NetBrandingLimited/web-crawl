@@ -1186,6 +1186,22 @@ export default function CrawlPage() {
     });
   }
 
+  function expandAllLoadedCompareRows() {
+    setExpandedCompareRowKeys((prev) => {
+      const n = new Set(prev);
+      for (const r of sortedFilteredCompareRows) n.add(`${r.change_kind}\t${r.url}`);
+      return n;
+    });
+  }
+
+  function collapseAllLoadedCompareRows() {
+    setExpandedCompareRowKeys((prev) => {
+      const n = new Set(prev);
+      for (const r of sortedFilteredCompareRows) n.delete(`${r.change_kind}\t${r.url}`);
+      return n;
+    });
+  }
+
   function goToComparePageFromInput() {
     const n = Number(comparePageJumpInput);
     if (!Number.isFinite(n) || n < 1) {
@@ -2299,10 +2315,26 @@ export default function CrawlPage() {
                 <button
                   type="button"
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => expandAllLoadedCompareRows()}
+                  disabled={sortedFilteredCompareRows.length === 0}
+                >
+                  Expand all loaded
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
                   onClick={() => collapseAllVisibleCompareRows()}
                   disabled={visibleSortedCompareRows.length === 0}
                 >
                   Collapse visible
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => collapseAllLoadedCompareRows()}
+                  disabled={sortedFilteredCompareRows.length === 0}
+                >
+                  Collapse all loaded
                 </button>
                 <button
                   type="button"
