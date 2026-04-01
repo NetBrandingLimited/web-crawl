@@ -1619,6 +1619,8 @@ export default function CrawlPage() {
     setCompareTablePage(1);
     setCompareExpandOnlyChangedFields(true);
     setExpandedCompareRowKeys(new Set());
+    setCompareAutoLoadAll(false);
+    setCompareExportAfterAutoLoad(false);
   }
 
   function clearCompareActiveFilters() {
@@ -1729,6 +1731,11 @@ export default function CrawlPage() {
     }
     setCompareExportAfterAutoLoad(true);
     if (compareDiffPreview?.nextCursor) setCompareAutoLoadAll(true);
+  }
+
+  function cancelAutoLoadExportWorkflow() {
+    setCompareAutoLoadAll(false);
+    setCompareExportAfterAutoLoad(false);
   }
 
   async function copyCompareDeepLink() {
@@ -2476,6 +2483,15 @@ export default function CrawlPage() {
                 >
                   {compareExportAfterAutoLoad ? "Auto-load + export pending…" : "Auto-load all + export filtered CSV"}
                 </button>
+                {(compareAutoLoadAll || compareExportAfterAutoLoad) && (
+                  <button
+                    type="button"
+                    className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                    onClick={() => cancelAutoLoadExportWorkflow()}
+                  >
+                    Cancel auto-load/export
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-600">
                 {compareDiffPreview.totalDiffRows != null ? (
