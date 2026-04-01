@@ -1079,6 +1079,8 @@ export default function CrawlPage() {
             setCompareLoadMoreError(
               `Could not load more diffs (HTTP ${res.status}).${detail ? ` ${detail.slice(0, 180)}` : ""}`,
             );
+            setCompareAutoLoadAll(false);
+            setCompareExportAfterAutoLoad(false);
             setCompareDiffPreview((prev) => (prev ? { ...prev, loadingMore: false } : prev));
             return;
           }
@@ -1115,6 +1117,8 @@ export default function CrawlPage() {
           });
         } catch {
           setCompareLoadMoreError("Could not load more diffs (network error).");
+          setCompareAutoLoadAll(false);
+          setCompareExportAfterAutoLoad(false);
           setCompareDiffPreview((prev) => (prev ? { ...prev, loadingMore: false } : prev));
         }
       })();
