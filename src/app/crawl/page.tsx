@@ -974,6 +974,7 @@ export default function CrawlPage() {
 
   useEffect(() => {
     setExpandedCompareRowKeys(new Set());
+    setCompareUrlListCopyNotice(null);
   }, [compareJobA, compareJobB]);
 
   const filteredCompareRows = useMemo(() => {
@@ -2747,8 +2748,18 @@ export default function CrawlPage() {
                         return (
                           <Fragment key={`${r.change_kind}:${r.url}:${i}`}>
                             <tr
-                              className="cursor-pointer hover:bg-zinc-50/70"
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={open}
+                              aria-label={`${r.change_kind}: ${r.url}. Press Enter or Space to expand details.`}
+                              className="cursor-pointer hover:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60 focus-visible:ring-offset-1"
                               onClick={() => toggleCompareRowExpanded(rowKey)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  toggleCompareRowExpanded(rowKey);
+                                }
+                              }}
                             >
                               <td className="px-3 py-2 font-mono">
                                 <span className="mr-1 inline-block w-3 text-zinc-400">{open ? "▼" : "▶"}</span>
