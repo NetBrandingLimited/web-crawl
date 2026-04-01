@@ -1201,6 +1201,14 @@ export default function CrawlPage() {
     setCompareFieldAnyOf(null);
   }
 
+  function quickFilterByChangedField(field: CompareChangedField) {
+    setComparePreset("all");
+    setCompareFieldAnyOf(null);
+    setCompareTableFilterKind("changed");
+    setCompareOnlyStatusChanges(false);
+    setCompareFieldFilter(field);
+  }
+
   useEffect(() => {
     setUrlTableFilter("");
   }, [jobId]);
@@ -2406,12 +2414,17 @@ export default function CrawlPage() {
                                       .map((f) => f.trim())
                                       .filter(Boolean)
                                       .map((f) => (
-                                        <span
+                                        <button
                                           key={`${r.url}:${f}`}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            quickFilterByChangedField(f as CompareChangedField);
+                                          }}
                                           className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-700"
                                         >
                                           {f}
-                                        </span>
+                                        </button>
                                       ))}
                                   </div>
                                 ) : (
