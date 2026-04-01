@@ -1742,6 +1742,15 @@ export default function CrawlPage() {
     setCompareExportAfterAutoLoad(false);
   }
 
+  function retryAutoLoadFromHere() {
+    if (!compareDiffPreview?.nextCursor) {
+      setCompareLoadMoreError("No remaining compare pages to auto-load.");
+      return;
+    }
+    setCompareLoadMoreError(null);
+    setCompareAutoLoadAll(true);
+  }
+
   async function copyCompareDeepLink() {
     setError(null);
     try {
@@ -2571,14 +2580,24 @@ export default function CrawlPage() {
               {compareLoadMoreError ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2 text-xs text-red-600">
                   <span>{compareLoadMoreError}</span>
-                  <button
-                    type="button"
-                    className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
-                    onClick={() => void loadMoreCompareDiffs()}
-                    disabled={compareDiffPreview.loadingMore || !compareDiffPreview.nextCursor}
-                  >
-                    Retry
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      onClick={() => void loadMoreCompareDiffs()}
+                      disabled={compareDiffPreview.loadingMore || !compareDiffPreview.nextCursor}
+                    >
+                      Retry page
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      onClick={() => retryAutoLoadFromHere()}
+                      disabled={compareDiffPreview.loadingMore || !compareDiffPreview.nextCursor}
+                    >
+                      Retry auto-load
+                    </button>
+                  </div>
                 </div>
               ) : null}
               <div className="max-h-64 overflow-auto">
