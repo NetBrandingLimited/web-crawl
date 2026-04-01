@@ -2064,6 +2064,114 @@ export default function CrawlPage() {
                   </label>
                 </div>
               ) : null}
+              {(compareTableFilterKind !== "all" ||
+                compareFieldFilter !== "all" ||
+                compareTableFilterText.trim() !== "" ||
+                compareOnlyStatusChanges ||
+                comparePreset !== "all" ||
+                comparePresetIncludeNewRemoved ||
+                compareSortKey !== "kind" ||
+                compareSortDir !== "asc" ||
+                compareTablePageSize !== 200 ||
+                compareTablePage > 1 ||
+                !compareExpandOnlyChangedFields) ? (
+                <div className="flex flex-wrap items-center gap-1.5 border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-600">
+                  <span className="mr-1 text-zinc-500">Active:</span>
+                  {compareTableFilterKind !== "all" ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => setCompareTableFilterKind("all")}
+                    >
+                      kind={compareTableFilterKind} ×
+                    </button>
+                  ) : null}
+                  {compareFieldFilter !== "all" ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => setCompareFieldFilter("all")}
+                    >
+                      field={compareFieldFilter} ×
+                    </button>
+                  ) : null}
+                  {compareTableFilterText.trim() !== "" ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => setCompareTableFilterText("")}
+                    >
+                      q={compareTableFilterText.trim()} ×
+                    </button>
+                  ) : null}
+                  {compareOnlyStatusChanges ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => setCompareOnlyStatusChanges(false)}
+                    >
+                      status-only ×
+                    </button>
+                  ) : null}
+                  {comparePreset !== "all" ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => setComparePreset("all")}
+                    >
+                      preset={comparePreset} ×
+                    </button>
+                  ) : null}
+                  {comparePresetIncludeNewRemoved ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => setComparePresetIncludeNewRemoved(false)}
+                    >
+                      include N/R ×
+                    </button>
+                  ) : null}
+                  {compareSortKey !== "kind" || compareSortDir !== "asc" ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => {
+                        setCompareSortKey("kind");
+                        setCompareSortDir("asc");
+                      }}
+                    >
+                      sort={compareSortKey}:{compareSortDir} ×
+                    </button>
+                  ) : null}
+                  {compareTablePageSize !== 200 ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => setCompareTablePageSize(200)}
+                    >
+                      page size={compareTablePageSize} ×
+                    </button>
+                  ) : null}
+                  {compareTablePage > 1 ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => setCompareTablePage(1)}
+                    >
+                      page={compareTablePage} ×
+                    </button>
+                  ) : null}
+                  {!compareExpandOnlyChangedFields ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      onClick={() => setCompareExpandOnlyChangedFields(true)}
+                    >
+                      expanded=all fields ×
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2">
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
