@@ -93,7 +93,7 @@ type CompareChangedField =
   | "html_lang"
   | "response_time_ms";
 type ComparePresetId = "all" | "status" | "content" | "technical" | "performance";
-type CompareSortKey = "kind" | "url" | "fields" | "status_a" | "status_b";
+type CompareSortKey = "kind" | "url" | "fields" | "status_a" | "status_b" | "status_delta";
 
 /** Fields used by quick presets (any match in `changed_fields` counts). */
 const COMPARE_PRESET_FIELD_GROUPS: Record<Exclude<ComparePresetId, "all">, CompareChangedField[]> = {
@@ -190,6 +190,11 @@ function parseCompareApiRow(row: Record<string, unknown>): CompareDiffRow {
     title_b: fullRow.title_b,
     fullRow,
   };
+}
+
+function numericStatusOrNull(v: string | number): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 type CrawlUrlsResponse = {
@@ -759,7 +764,8 @@ export default function CrawlPage() {
       sortKey === "url" ||
       sortKey === "fields" ||
       sortKey === "status_a" ||
-      sortKey === "status_b"
+      sortKey === "status_b" ||
+      sortKey === "status_delta"
     ) {
       setCompareSortKey(sortKey);
     }
@@ -1022,6 +1028,12 @@ export default function CrawlPage() {
         if (compareSortKey === "url") return r.url;
         if (compareSortKey === "fields") return r.changed_fields;
         if (compareSortKey === "status_a") return Number(r.http_status_a || 0);
+        if (compareSortKey === "status_delta") {
+          const sa = numericStatusOrNull(r.http_status_a);
+          const sb = numericStatusOrNull(r.http_status_b);
+          if (sa == null || sb == null) return -9999;
+          return sb - sa;
+        }
         return Number(r.http_status_b || 0);
       };
       const av = val(a);
@@ -2513,6 +2525,7 @@ export default function CrawlPage() {
                   <option value="fields">Sort: changed fields</option>
                   <option value="status_a">Sort: status A</option>
                   <option value="status_b">Sort: status B</option>
+                  <option value="status_delta">Sort: status Δ</option>
                 </select>
                 <button
                   type="button"
@@ -2739,6 +2752,15 @@ export default function CrawlPage() {
                             </button>
                           </div>
                         </th>
+                        <th className="px-3 py-2 font-medium">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 hover:text-zinc-700"
+                            onClick={() => setCompareSortFromHeader("status_delta")}
+                          >
+                            Status Δ {compareSortKey === "status_delta" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
+                          </button>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
@@ -2817,10 +2839,20 @@ export default function CrawlPage() {
                               <td className="px-3 py-2">
                                 {String(r.http_status_a || "-")} / {String(r.http_status_b || "-")}
                               </td>
+                              <td className="px-3 py-2 font-mono">
+                                {(() => {
+                                  const sa = numericStatusOrNull(r.http_status_a);
+                                  const sb = numericStatusOrNull(r.http_status_b);
+                                  if (sa == null || sb == null) return "—";
+                                  const delta = sb - sa;
+                                  const sign = delta > 0 ? "+" : "";
+                                  return `${sign}${delta}`;
+                                })()}
+                              </td>
                             </tr>
                             {open ? (
                               <tr className="bg-zinc-50/80">
-                                <td colSpan={4} className="px-3 py-3">
+                                <td colSpan={5} className="px-3 py-3">
                                   <div className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]">
                                     <div className="border-b border-zinc-200 pb-1 font-semibold text-zinc-600">Field</div>
                                     <div className="border-b border-zinc-200 pb-1 font-mono font-semibold text-zinc-600">
