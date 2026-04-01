@@ -2095,7 +2095,9 @@ export default function CrawlPage() {
             crawl URL hash. Rows: <span className="font-mono">new_in_b</span>, <span className="font-mono">removed_in_a</span>,{" "}
             <span className="font-mono">changed</span> (status, title, canonical, meta, word count, H1, content-type, robots meta, meta refresh, body
             hash, X-Robots-Tag, HTML <span className="font-mono">lang</span>, response time). With two jobs selected, this page updates the URL with{" "}
-            <span className="font-mono">compareA</span> / <span className="font-mono">compareB</span> so you can bookmark or share the pair.
+            <span className="font-mono">compareA</span> / <span className="font-mono">compareB</span> so you can bookmark or share the pair. With the
+            diff table visible, filters and sort are also written to the URL (for example <span className="font-mono">csk=status_delta</span> to sort by
+            HTTP status change between A and B).
           </p>
           {searchingOlderJobsForUrlCompare ? (
             <div className="mt-2 text-xs text-zinc-500">
@@ -2709,7 +2711,8 @@ export default function CrawlPage() {
                   <div className="px-3 py-4 text-xs text-zinc-500">No compare rows match the current filters.</div>
                 ) : (
                   <p className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500">
-                    Click a row to expand full A vs B field values. Differing values are emphasized.
+                    Click a row to expand full A vs B field values. Differing values are emphasized. Amber-tinted rows have a different{" "}
+                    <span className="font-medium">numeric HTTP status</span> in A vs B (other changes alone do not get this tint).
                   </p>
                 )}
                 {filteredCompareRows.length === 0 ? null : (
@@ -2779,13 +2782,16 @@ export default function CrawlPage() {
                         const open = expandedCompareRowKeys.has(rowKey);
                         const deltaStr = compareRowStatusDeltaLabel(r);
                         const statusChangedHighlight = deltaStr !== "" && deltaStr !== "0";
+                        const rowAriaLabel = statusChangedHighlight
+                          ? `${r.change_kind}: ${r.url}. Numeric HTTP status differs between A and B, delta ${deltaStr}. Press Enter or Space to expand details.`
+                          : `${r.change_kind}: ${r.url}. Press Enter or Space to expand details.`;
                         return (
                           <Fragment key={`${r.change_kind}:${r.url}:${i}`}>
                             <tr
                               role="button"
                               tabIndex={0}
                               aria-expanded={open}
-                              aria-label={`${r.change_kind}: ${r.url}. Press Enter or Space to expand details.`}
+                              aria-label={rowAriaLabel}
                               className={`cursor-pointer hover:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60 focus-visible:ring-offset-1 ${
                                 statusChangedHighlight ? "bg-amber-50/60" : ""
                               }`}
