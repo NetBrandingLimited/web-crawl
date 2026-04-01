@@ -2674,7 +2674,20 @@ export default function CrawlPage() {
                                 <span className="mr-1 inline-block w-3 text-zinc-400">{open ? "▼" : "▶"}</span>
                                 {r.change_kind}
                               </td>
-                              <td className="max-w-[38rem] truncate px-3 py-2 font-mono">{r.url}</td>
+                              <td className="max-w-[38rem] px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="min-w-0 flex-1 truncate font-mono">{r.url}</span>
+                                  <a
+                                    href={r.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] text-zinc-700 hover:bg-zinc-50"
+                                  >
+                                    Open
+                                  </a>
+                                </div>
+                              </td>
                               <td className="px-3 py-2">
                                 {r.changed_fields ? (
                                   <div className="flex flex-wrap gap-1">
