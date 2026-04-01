@@ -197,6 +197,14 @@ function numericStatusOrNull(v: string | number): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+function compareRowStatusDeltaLabel(r: CompareDiffRow): string {
+  const sa = numericStatusOrNull(r.http_status_a);
+  const sb = numericStatusOrNull(r.http_status_b);
+  if (sa == null || sb == null) return "";
+  const delta = sb - sa;
+  return `${delta > 0 ? "+" : ""}${delta}`;
+}
+
 type CrawlUrlsResponse = {
   items: Array<{
     id: string;
@@ -1006,7 +1014,9 @@ export default function CrawlPage() {
         if (!fields.includes("status")) return false;
       }
       if (!q) return true;
-      const blob = COMPARE_FULL_CSV_HEADERS.map((h) => r.fullRow[h]).join("\n").toLowerCase();
+      const deltaTxt = compareRowStatusDeltaLabel(r);
+      const blob =
+        `${COMPARE_FULL_CSV_HEADERS.map((h) => r.fullRow[h]).join("\n")}\n${deltaTxt}\nstatus_delta`.toLowerCase();
       return blob.includes(q);
     });
   }, [
@@ -2767,6 +2777,8 @@ export default function CrawlPage() {
                       {visibleSortedCompareRows.map((r, i) => {
                         const rowKey = `${r.change_kind}\t${r.url}`;
                         const open = expandedCompareRowKeys.has(rowKey);
+                        const deltaStr = compareRowStatusDeltaLabel(r);
+                        const statusChangedHighlight = deltaStr !== "" && deltaStr !== "0";
                         return (
                           <Fragment key={`${r.change_kind}:${r.url}:${i}`}>
                             <tr
@@ -2774,7 +2786,9 @@ export default function CrawlPage() {
                               tabIndex={0}
                               aria-expanded={open}
                               aria-label={`${r.change_kind}: ${r.url}. Press Enter or Space to expand details.`}
-                              className="cursor-pointer hover:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60 focus-visible:ring-offset-1"
+                              className={`cursor-pointer hover:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60 focus-visible:ring-offset-1 ${
+                                statusChangedHighlight ? "bg-amber-50/60" : ""
+                              }`}
                               onClick={() => toggleCompareRowExpanded(rowKey)}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
@@ -2839,16 +2853,7 @@ export default function CrawlPage() {
                               <td className="px-3 py-2">
                                 {String(r.http_status_a || "-")} / {String(r.http_status_b || "-")}
                               </td>
-                              <td className="px-3 py-2 font-mono">
-                                {(() => {
-                                  const sa = numericStatusOrNull(r.http_status_a);
-                                  const sb = numericStatusOrNull(r.http_status_b);
-                                  if (sa == null || sb == null) return "—";
-                                  const delta = sb - sa;
-                                  const sign = delta > 0 ? "+" : "";
-                                  return `${sign}${delta}`;
-                                })()}
-                              </td>
+                              <td className="px-3 py-2 font-mono">{deltaStr === "" ? "—" : deltaStr}</td>
                             </tr>
                             {open ? (
                               <tr className="bg-zinc-50/80">
