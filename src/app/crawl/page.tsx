@@ -1195,6 +1195,12 @@ export default function CrawlPage() {
     setCompareTablePage(Math.min(compareTableTotalPages, Math.floor(n)));
   }
 
+  function toggleCompareKindQuickFilter(kind: CompareChangeKind) {
+    setCompareTableFilterKind((prev) => (prev === kind ? "all" : kind));
+    setComparePreset("all");
+    setCompareFieldAnyOf(null);
+  }
+
   useEffect(() => {
     setUrlTableFilter("");
   }, [jobId]);
@@ -2115,15 +2121,39 @@ export default function CrawlPage() {
                   Status changes only
                 </label>
                 <span className="text-xs text-zinc-500">{filteredCompareRows.length} row(s)</span>
-                <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] text-zinc-600">
+                <button
+                  type="button"
+                  className={`rounded-md border px-2 py-1 text-[11px] ${
+                    compareTableFilterKind === "changed"
+                      ? "border-zinc-900 bg-zinc-900 text-white"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                  }`}
+                  onClick={() => toggleCompareKindQuickFilter("changed")}
+                >
                   changed: {filteredCompareKindCounts.changed}
-                </span>
-                <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] text-zinc-600">
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border px-2 py-1 text-[11px] ${
+                    compareTableFilterKind === "new_in_b"
+                      ? "border-zinc-900 bg-zinc-900 text-white"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                  }`}
+                  onClick={() => toggleCompareKindQuickFilter("new_in_b")}
+                >
                   new_in_b: {filteredCompareKindCounts.newInB}
-                </span>
-                <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] text-zinc-600">
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border px-2 py-1 text-[11px] ${
+                    compareTableFilterKind === "removed_in_a"
+                      ? "border-zinc-900 bg-zinc-900 text-white"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                  }`}
+                  onClick={() => toggleCompareKindQuickFilter("removed_in_a")}
+                >
                   removed_in_a: {filteredCompareKindCounts.removedInA}
-                </span>
+                </button>
                 <button
                   type="button"
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
