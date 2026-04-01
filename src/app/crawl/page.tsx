@@ -4,8 +4,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 
 const WORKER_STEPS_CAP = 4000;
 const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
-/** Page size for Phase 2 compare JSON (`paginate=1` on compare API). */
-const COMPARE_DIFF_PAGE_LIMIT = 500;
+/** Default page size for Phase 2 compare JSON (`paginate=1` on compare API). */
+const DEFAULT_COMPARE_DIFF_PAGE_LIMIT = 500;
 const DEFAULT_MAX_DEPTH = 10;
 // Keep this close to the "about 500 URLs" target so the crawl doesn't explode.
 const DEFAULT_MAX_PAGES = 600;
@@ -590,6 +590,7 @@ export default function CrawlPage() {
   const [comparePreset, setComparePreset] = useState<ComparePresetId>("all");
   const [compareSortKey, setCompareSortKey] = useState<CompareSortKey>("kind");
   const [compareSortDir, setCompareSortDir] = useState<"asc" | "desc">("asc");
+  const [compareDiffApiPageLimit, setCompareDiffApiPageLimit] = useState<200 | 500 | 1000>(DEFAULT_COMPARE_DIFF_PAGE_LIMIT);
   const [compareTablePage, setCompareTablePage] = useState(1);
   const [compareTablePageSize, setCompareTablePageSize] = useState<100 | 200 | 500>(200);
   const [comparePageJumpInput, setComparePageJumpInput] = useState("");
@@ -721,6 +722,7 @@ export default function CrawlPage() {
     const expandedChangedOnly = url.searchParams.get("ceco");
     const tablePage = url.searchParams.get("ctp");
     const tablePageSize = url.searchParams.get("ctps");
+    const diffApiLimit = url.searchParams.get("cdl");
     applyingCompareFiltersFromUrl.current = true;
     if (kind === "all" || kind === "changed" || kind === "new_in_b" || kind === "removed_in_a") {
       setCompareTableFilterKind(kind);
@@ -766,6 +768,9 @@ export default function CrawlPage() {
     }
     if (tablePageSize === "100" || tablePageSize === "200" || tablePageSize === "500") {
       setCompareTablePageSize(Number(tablePageSize) as 100 | 200 | 500);
+    }
+    if (diffApiLimit === "200" || diffApiLimit === "500" || diffApiLimit === "1000") {
+      setCompareDiffApiPageLimit(Number(diffApiLimit) as 200 | 500 | 1000);
     }
     if (tablePage && Number.isFinite(Number(tablePage))) {
       setCompareTablePage(Math.max(1, Math.floor(Number(tablePage))));
@@ -863,6 +868,9 @@ export default function CrawlPage() {
     else url.searchParams.delete("ctps");
     if (compareTablePage > 1) url.searchParams.set("ctp", String(compareTablePage));
     else url.searchParams.delete("ctp");
+    if (compareDiffApiPageLimit !== DEFAULT_COMPARE_DIFF_PAGE_LIMIT)
+      url.searchParams.set("cdl", String(compareDiffApiPageLimit));
+    else url.searchParams.delete("cdl");
     const next = `${url.pathname}${url.search}${url.hash}`;
     if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
       window.history.replaceState({}, "", next);
@@ -873,6 +881,7 @@ export default function CrawlPage() {
     comparePreset,
     comparePresetIncludeNewRemoved,
     compareExpandOnlyChangedFields,
+    compareDiffApiPageLimit,
     compareTablePage,
     compareTablePageSize,
     compareSortDir,
@@ -903,7 +912,7 @@ export default function CrawlPage() {
       comparePreviewAbortRef.current?.abort();
       const ac = new AbortController();
       comparePreviewAbortRef.current = ac;
-      const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json&paginate=1&limit=${COMPARE_DIFF_PAGE_LIMIT}`;
+      const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json&paginate=1&limit=${compareDiffApiPageLimit}`;
       void (async () => {
         try {
           const res = await fetch(u, { cache: "no-store", signal: ac.signal });
@@ -955,7 +964,7 @@ export default function CrawlPage() {
       comparePreviewAbortRef.current?.abort();
       comparePreviewAbortRef.current = null;
     };
-  }, [compareJobA, compareJobB]);
+  }, [compareDiffApiPageLimit, compareJobA, compareJobB]);
 
   useEffect(() => {
     setExpandedCompareRowKeys(new Set());
@@ -1039,8 +1048,8 @@ export default function CrawlPage() {
   }, [compareDiffPreview?.rows?.length, compareDiffPreview?.totalDiffRows]);
   const compareEstimatedRemainingPages = useMemo(() => {
     if (!compareDiffPreview?.nextCursor) return 0;
-    return Math.ceil(compareRemainingRows / COMPARE_DIFF_PAGE_LIMIT);
-  }, [compareDiffPreview?.nextCursor, compareRemainingRows]);
+    return Math.ceil(compareRemainingRows / compareDiffApiPageLimit);
+  }, [compareDiffApiPageLimit, compareDiffPreview?.nextCursor, compareRemainingRows]);
   const filteredCompareKindCounts = useMemo(() => {
     let changed = 0;
     let newInB = 0;
@@ -1061,7 +1070,7 @@ export default function CrawlPage() {
       const cursor = p.nextCursor;
       void (async () => {
         try {
-          const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json&paginate=1&limit=${COMPARE_DIFF_PAGE_LIMIT}&cursor=${encodeURIComponent(cursor)}`;
+          const u = `/api/v1/crawl-jobs/compare?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(compareJobB)}&format=json&paginate=1&limit=${compareDiffApiPageLimit}&cursor=${encodeURIComponent(cursor)}`;
           const res = await fetch(u, { cache: "no-store" });
           if (!res.ok) {
             const detail = (await res.text().catch(() => "")).trim();
@@ -1109,7 +1118,7 @@ export default function CrawlPage() {
       })();
       return { ...p, loadingMore: true };
     });
-  }, [compareJobA, compareJobB]);
+  }, [compareDiffApiPageLimit, compareJobA, compareJobB]);
 
   useEffect(() => {
     if (!compareAutoLoadAll) return;
@@ -1555,6 +1564,7 @@ export default function CrawlPage() {
     setComparePreset("all");
     setCompareSortKey("kind");
     setCompareSortDir("asc");
+    setCompareDiffApiPageLimit(DEFAULT_COMPARE_DIFF_PAGE_LIMIT);
     setCompareTablePageSize(200);
     setCompareTablePage(1);
     setCompareExpandOnlyChangedFields(true);
@@ -2139,6 +2149,15 @@ export default function CrawlPage() {
                 </button>
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  value={compareDiffApiPageLimit}
+                  onChange={(e) => setCompareDiffApiPageLimit(Number(e.target.value) as 200 | 500 | 1000)}
+                >
+                  <option value={200}>API page: 200</option>
+                  <option value={500}>API page: 500</option>
+                  <option value={1000}>API page: 1000</option>
+                </select>
+                <select
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
                   value={compareTablePageSize}
                   onChange={(e) => setCompareTablePageSize(Number(e.target.value) as 100 | 200 | 500)}
                 >
@@ -2200,7 +2219,7 @@ export default function CrawlPage() {
                 {compareDiffPreview.nextCursor ? (
                   <span className="text-zinc-500">
                     Approx remaining: {compareRemainingRows} row(s), {compareEstimatedRemainingPages} page(s) at{" "}
-                    {COMPARE_DIFF_PAGE_LIMIT}/page.
+                    {compareDiffApiPageLimit}/page.
                   </span>
                 ) : null}
                 {compareAutoLoadAll ? <span className="text-zinc-700">Auto-load in progress…</span> : null}
