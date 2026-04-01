@@ -6,6 +6,8 @@ const WORKER_STEPS_CAP = 4000;
 const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
 /** Default page size for Phase 2 compare JSON (`paginate=1` on compare API). */
 const DEFAULT_COMPARE_DIFF_PAGE_LIMIT = 500;
+/** Max URLs in one clipboard list copy (filtered); avoids huge payloads / browser limits. */
+const COMPARE_COPY_URLS_MAX = 5000;
 const DEFAULT_MAX_DEPTH = 10;
 // Keep this close to the "about 500 URLs" target so the crawl doesn't explode.
 const DEFAULT_MAX_PAGES = 600;
@@ -598,6 +600,7 @@ export default function CrawlPage() {
   const [compareExpandOnlyChangedFields, setCompareExpandOnlyChangedFields] = useState(true);
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
   const [copiedCompareRowUrl, setCopiedCompareRowUrl] = useState<string | null>(null);
+  const [compareUrlListCopyNotice, setCompareUrlListCopyNotice] = useState<string | null>(null);
   const [compareLoadMoreError, setCompareLoadMoreError] = useState<string | null>(null);
   const [compareAutoLoadAll, setCompareAutoLoadAll] = useState(false);
   const [compareExportAfterAutoLoad, setCompareExportAfterAutoLoad] = useState(false);
@@ -1763,6 +1766,46 @@ export default function CrawlPage() {
     }
   }
 
+  async function copyFilteredCompareUrls() {
+    setError(null);
+    setCompareUrlListCopyNotice(null);
+    if (filteredCompareRows.length === 0) {
+      setError("No compare rows match the current filters.");
+      return;
+    }
+    if (filteredCompareRows.length > COMPARE_COPY_URLS_MAX) {
+      setError(
+        `Too many URLs to copy at once (${filteredCompareRows.length}). Narrow filters to ${COMPARE_COPY_URLS_MAX} or fewer, or export CSV.`,
+      );
+      return;
+    }
+    const text = filteredCompareRows.map((r) => r.url).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCompareUrlListCopyNotice(`Copied ${filteredCompareRows.length} filtered URL(s).`);
+      window.setTimeout(() => setCompareUrlListCopyNotice(null), 2200);
+    } catch {
+      setError("Could not copy URLs (clipboard blocked or unavailable).");
+    }
+  }
+
+  async function copyVisibleComparePageUrls() {
+    setError(null);
+    setCompareUrlListCopyNotice(null);
+    if (visibleSortedCompareRows.length === 0) {
+      setError("No compare rows on the current page.");
+      return;
+    }
+    const text = visibleSortedCompareRows.map((r) => r.url).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCompareUrlListCopyNotice(`Copied ${visibleSortedCompareRows.length} URL(s) on this page.`);
+      window.setTimeout(() => setCompareUrlListCopyNotice(null), 2200);
+    } catch {
+      setError("Could not copy URLs (clipboard blocked or unavailable).");
+    }
+  }
+
   async function copyCompareRowUrl(url: string) {
     try {
       await navigator.clipboard.writeText(url);
@@ -2503,6 +2546,27 @@ export default function CrawlPage() {
                 </button>
                 <button
                   type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => void copyVisibleComparePageUrls()}
+                  disabled={visibleSortedCompareRows.length === 0}
+                >
+                  Copy page URLs
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => void copyFilteredCompareUrls()}
+                  disabled={filteredCompareRows.length === 0 || filteredCompareRows.length > COMPARE_COPY_URLS_MAX}
+                  title={
+                    filteredCompareRows.length > COMPARE_COPY_URLS_MAX
+                      ? `Narrow to ${COMPARE_COPY_URLS_MAX} rows or fewer`
+                      : undefined
+                  }
+                >
+                  Copy filtered URLs
+                </button>
+                <button
+                  type="button"
                   className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
                   onClick={() => autoLoadAllAndExportFilteredCsv()}
                   disabled={!compareJobA || !compareJobB || compareJobA === compareJobB || compareDiffPreview.loading}
@@ -2519,6 +2583,9 @@ export default function CrawlPage() {
                   </button>
                 )}
               </div>
+              {compareUrlListCopyNotice ? (
+                <div className="border-b border-zinc-100 px-3 py-1.5 text-[11px] text-emerald-700">{compareUrlListCopyNotice}</div>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-600">
                 {compareDiffPreview.totalDiffRows != null ? (
                   <span>
