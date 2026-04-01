@@ -1675,6 +1675,32 @@ export default function CrawlPage() {
     URL.revokeObjectURL(objectUrl);
   }
 
+  function downloadVisibleComparePageCsv() {
+    setError(null);
+    if (!compareJobA || !compareJobB) {
+      setError("Choose baseline job (A) and compare job (B).");
+      return;
+    }
+    if (visibleSortedCompareRows.length === 0) {
+      setError("No compare rows on the current page.");
+      return;
+    }
+    const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
+    for (const r of visibleSortedCompareRows) {
+      lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(r.fullRow[h])).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = `crawl-compare-page-${compareTablePage}-${compareJobA.slice(0, 8)}-${compareJobB.slice(0, 8)}.csv`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  }
+
   async function copyCompareDeepLink() {
     setError(null);
     try {
@@ -2403,6 +2429,14 @@ export default function CrawlPage() {
                   disabled={filteredCompareRows.length === 0}
                 >
                   Download filtered full CSV
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => downloadVisibleComparePageCsv()}
+                  disabled={visibleSortedCompareRows.length === 0}
+                >
+                  Download current page CSV
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-600">
