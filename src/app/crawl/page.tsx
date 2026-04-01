@@ -597,6 +597,7 @@ export default function CrawlPage() {
   const [expandedCompareRowKeys, setExpandedCompareRowKeys] = useState<Set<string>>(() => new Set());
   const [compareExpandOnlyChangedFields, setCompareExpandOnlyChangedFields] = useState(true);
   const [compareLinkCopied, setCompareLinkCopied] = useState(false);
+  const [copiedCompareRowUrl, setCopiedCompareRowUrl] = useState<string | null>(null);
   const [compareLoadMoreError, setCompareLoadMoreError] = useState<string | null>(null);
   const [compareAutoLoadAll, setCompareAutoLoadAll] = useState(false);
   const [compareExportAfterAutoLoad, setCompareExportAfterAutoLoad] = useState(false);
@@ -1762,6 +1763,18 @@ export default function CrawlPage() {
     }
   }
 
+  async function copyCompareRowUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedCompareRowUrl(url);
+      window.setTimeout(() => {
+        setCopiedCompareRowUrl((u) => (u === url ? null : u));
+      }, 1800);
+    } catch {
+      setError("Could not copy URL (clipboard blocked or unavailable).");
+    }
+  }
+
   async function openJobInViewer(id: string): Promise<boolean> {
     setError(null);
     const res = await fetch(`/api/v1/crawl-jobs/${encodeURIComponent(id)}`, { cache: "no-store" });
@@ -2686,6 +2699,16 @@ export default function CrawlPage() {
                                   >
                                     Open
                                   </a>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void copyCompareRowUrl(r.url);
+                                    }}
+                                    className="rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] text-zinc-700 hover:bg-zinc-50"
+                                  >
+                                    {copiedCompareRowUrl === r.url ? "Copied" : "Copy"}
+                                  </button>
                                 </div>
                               </td>
                               <td className="px-3 py-2">
