@@ -278,11 +278,20 @@ export async function GET(req: Request) {
       const n = items.length;
       if (start >= n) return [];
       const endExclusive = Math.min(n, start + count);
-      const heapSize = endExclusive; // keep smallest `heapSize` items
+      const wantCount = endExclusive - start;
 
-      // Max-heap by key: keeps the largest among the "smallest set".
+      // Heuristic: if we're deep into the sorted list, it's cheaper to keep the *tail*
+      // rather than the full prefix up to `endExclusive`.
+      // - Keep smallest `endExclusive` items and slice [start, endExclusive) (current behavior).
+      // - Or keep largest `n - start` items, sort them ascending, then slice [0, wantCount).
+      const keepSmallestPrefix = endExclusive <= n - start;
+      const heapSize = keepSmallestPrefix ? endExclusive : n - start;
+
+      const keyCmp = keepSmallestPrefix ? urlThenIAsc : ((a: T, b: T) => -urlThenIAsc(a, b));
+
+      // Max-heap by key: keeps the largest among the "smallest set" under `keyCmp`.
       const heap: T[] = [];
-      const isGreater = (a: T, b: T) => urlThenIAsc(a, b) > 0;
+      const isGreater = (a: T, b: T) => keyCmp(a, b) > 0;
 
       const heapifyUp = (idx: number) => {
         while (idx > 0) {
@@ -318,14 +327,15 @@ export async function GET(req: Request) {
           continue;
         }
         // Keep only the smallest `heapSize` items.
-        if (urlThenIAsc(item, heap[0]) < 0) {
+        if (keyCmp(item, heap[0]) < 0) {
           heap[0] = item;
           heapifyDown(0);
         }
       }
 
+      // Sort the kept set in true ascending order, then slice out the requested range.
       heap.sort(urlThenIAsc);
-      return heap.slice(start, endExclusive);
+      return keepSmallestPrefix ? heap.slice(start, endExclusive) : heap.slice(0, wantCount);
     }
 
     const endExclusiveGlobal = Math.min(totalDiffRows, offset + pageLimit);
