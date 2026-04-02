@@ -657,6 +657,7 @@ export default function CrawlPage() {
   const [urls, setUrls] = useState<CrawlUrlsResponse["items"]>([]);
   const [urlsNextCursor, setUrlsNextCursor] = useState<string | null>(null);
   const [urlsLoadingMore, setUrlsLoadingMore] = useState(false);
+  const [urlsReloading, setUrlsReloading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [crawling, setCrawling] = useState(false);
@@ -1856,25 +1857,44 @@ export default function CrawlPage() {
   async function loadUrls(id?: string) {
     const effectiveId = id ?? jobId;
     if (!effectiveId) return;
-    const res = await fetch(`/api/v1/crawl-jobs/${effectiveId}/urls?limit=${URLS_TABLE_LIMIT}`, { cache: "no-store" });
-    if (!res.ok) return;
-    const json = (await res.json()) as CrawlUrlsResponse;
-    setUrls(json.items);
-    setUrlsNextCursor(json.next_cursor);
+    setUrlsReloading(true);
+    try {
+      const res = await fetch(`/api/v1/crawl-jobs/${effectiveId}/urls?limit=${URLS_TABLE_LIMIT}`, { cache: "no-store" });
+      if (!res.ok) {
+        setError(
+          res.status === 404 ? "Crawl job not found." : `Could not load discovered URLs (${res.status}).`,
+        );
+        return;
+      }
+      const json = (await res.json()) as CrawlUrlsResponse;
+      setUrls(json.items);
+      setUrlsNextCursor(json.next_cursor);
+    } catch (e) {
+      setError(describeFetchFailure(e, "Load discovered URLs"));
+    } finally {
+      setUrlsReloading(false);
+    }
   }
 
   async function loadMoreUrls() {
-    if (!jobId || !urlsNextCursor || urlsLoadingMore) return;
+    if (!jobId || !urlsNextCursor || urlsLoadingMore || urlsReloading) return;
     setUrlsLoadingMore(true);
     try {
       const res = await fetch(
         `/api/v1/crawl-jobs/${jobId}/urls?limit=${URLS_TABLE_LIMIT}&cursor=${encodeURIComponent(urlsNextCursor)}`,
         { cache: "no-store" },
       );
-      if (!res.ok) return;
+      if (!res.ok) {
+        setError(
+          res.status === 404 ? "Crawl job not found." : `Could not load more URLs (${res.status}).`,
+        );
+        return;
+      }
       const json = (await res.json()) as CrawlUrlsResponse;
       setUrls((prev) => [...prev, ...json.items]);
       setUrlsNextCursor(json.next_cursor);
+    } catch (e) {
+      setError(describeFetchFailure(e, "Load more URLs"));
     } finally {
       setUrlsLoadingMore(false);
     }
@@ -4069,9 +4089,9 @@ export default function CrawlPage() {
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-zinc-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm font-medium">Discovered URLs</div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:max-w-3xl sm:flex-1 sm:flex-row sm:items-center sm:gap-3">
               <input
-                className="w-full min-w-[12rem] rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 sm:max-w-md"
+                className="w-full min-w-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 sm:min-w-[12rem] sm:max-w-md sm:flex-1"
                 value={urlTableFilter}
                 onChange={(e) => setUrlTableFilter(e.target.value)}
                 placeholder="Filter by URL, title, status, queue…"
@@ -4079,22 +4099,25 @@ export default function CrawlPage() {
                 type="search"
                 aria-label="Filter discovered URLs"
               />
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => loadUrls()}
-                disabled={!jobId}
-                type="button"
-              >
-                Reload
-              </button>
-              <button
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
-                onClick={() => void loadMoreUrls()}
-                disabled={!jobId || !urlsNextCursor || urlsLoadingMore}
-                type="button"
-              >
-                {urlsLoadingMore ? "Loading…" : "Load more"}
-              </button>
+              <div className="flex shrink-0 flex-row flex-nowrap items-center justify-end gap-2 sm:justify-start">
+                <button
+                  className="whitespace-nowrap rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={() => void loadUrls()}
+                  disabled={!jobId || urlsReloading}
+                  type="button"
+                >
+                  {urlsReloading ? "Loading…" : "Reload"}
+                </button>
+                <button
+                  className="whitespace-nowrap rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => void loadMoreUrls()}
+                  disabled={!jobId || !urlsNextCursor || urlsLoadingMore || urlsReloading}
+                  type="button"
+                  title={!urlsNextCursor ? "All loaded URLs for this page are already shown." : undefined}
+                >
+                  {urlsLoadingMore ? "Loading…" : "Load more"}
+                </button>
+              </div>
             </div>
           </div>
           {urls.length > 0 ? (
