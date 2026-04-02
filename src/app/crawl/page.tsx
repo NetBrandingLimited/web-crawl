@@ -4,6 +4,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 
 const WORKER_STEPS_CAP = 4000;
 const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
+/** Debounce compare table text search so large loaded diffs are not re-sorted on every keystroke. */
+const COMPARE_TABLE_TEXT_FILTER_DEBOUNCE_MS = 240;
 /** Default page size for Phase 2 compare JSON (`paginate=1` on compare API). */
 const DEFAULT_COMPARE_DIFF_PAGE_LIMIT = 500;
 /** Max URLs in one clipboard list copy (filtered); avoids huge payloads / browser limits. */
@@ -654,6 +656,8 @@ export default function CrawlPage() {
   } | null>(null);
   const [compareTableFilterKind, setCompareTableFilterKind] = useState<"all" | CompareChangeKind>("all");
   const [compareTableFilterText, setCompareTableFilterText] = useState("");
+  /** Applied to row filter/sort; lags `compareTableFilterText` while typing (see effects below). */
+  const [debouncedCompareFilterQ, setDebouncedCompareFilterQ] = useState("");
   const [compareOnlyStatusChanges, setCompareOnlyStatusChanges] = useState(false);
   const [compareFieldFilter, setCompareFieldFilter] = useState<"all" | CompareChangedField>("all");
   /** When set, row must include at least one of these in `changed_fields` (presets). Manual single-field uses `compareFieldFilter` instead. */
@@ -821,7 +825,10 @@ export default function CrawlPage() {
     ) {
       setCompareFieldFilter(field);
     }
-    if (typeof query === "string") setCompareTableFilterText(query);
+    if (typeof query === "string") {
+      setCompareTableFilterText(query);
+      setDebouncedCompareFilterQ(query.trim().toLowerCase());
+    }
     if (statusOnly === "1") setCompareOnlyStatusChanges(true);
     if (includeNr === "1") setComparePresetIncludeNewRemoved(true);
     if (
@@ -1048,10 +1055,26 @@ export default function CrawlPage() {
     setCompareUrlListCopyNotice(null);
   }, [compareJobA, compareJobB]);
 
+  useEffect(() => {
+    const q = compareTableFilterText.trim().toLowerCase();
+    if (q === "") {
+      setDebouncedCompareFilterQ("");
+      return;
+    }
+    const id = window.setTimeout(() => setDebouncedCompareFilterQ(q), COMPARE_TABLE_TEXT_FILTER_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [compareTableFilterText]);
+
+  /** New A/B pair: apply current box text immediately so results match the visible query. */
+  useEffect(() => {
+    setDebouncedCompareFilterQ(compareTableFilterText.trim().toLowerCase());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only flush when jobs change, not on each keystroke
+  }, [compareJobA, compareJobB]);
+
   const filteredCompareRows = useMemo(() => {
     const rows = compareDiffPreview?.rows ?? [];
     const kind = compareTableFilterKind;
-    const q = compareTableFilterText.trim().toLowerCase();
+    const q = debouncedCompareFilterQ;
     return rows.filter((r) => {
       if (kind !== "all" && r.change_kind !== kind) return false;
       const fields = r.changedFieldNames;
@@ -1077,7 +1100,7 @@ export default function CrawlPage() {
     compareFieldFilter,
     compareOnlyStatusChanges,
     compareTableFilterKind,
-    compareTableFilterText,
+    debouncedCompareFilterQ,
   ]);
 
   const sortedFilteredCompareRows = useMemo(() => {
