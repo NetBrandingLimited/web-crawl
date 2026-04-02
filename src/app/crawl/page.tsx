@@ -2358,6 +2358,16 @@ export default function CrawlPage() {
       void ensureCompareRowDetails(urlHash).catch(() => {});
     }, [urlHash, details, loading, compareJobA, compareJobB]);
 
+    // Performance: when a row is expanded, prefetch adjacent rows so Escape/arrow navigation feels instant.
+    useEffect(() => {
+      if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
+      const maybe = [rowIndexOnPage - 1, rowIndexOnPage + 1]
+        .map((idx) => visibleSortedCompareRows[idx])
+        .filter(Boolean) as CompareDiffRow[];
+      if (maybe.length === 0) return;
+      void Promise.allSettled(maybe.map((m) => ensureCompareRowDetails(m.url_hash)));
+    }, [rowIndexOnPage, visibleSortedCompareRows, compareJobA, compareJobB, ensureCompareRowDetails]);
+
     return (
       <tr className="bg-zinc-50/80">
         <td colSpan={5} className="px-3 py-3">
