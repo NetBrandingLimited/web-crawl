@@ -176,6 +176,10 @@ type CompareDiffRow = {
   url: string;
   http_status_a: number | string;
   http_status_b: number | string;
+  /** Precomputed label for status delta (B minus A), empty when numeric delta can’t be computed. */
+  statusDeltaLabel: string;
+  /** Precomputed numeric status delta (B minus A), null when delta can’t be computed. */
+  statusDeltaNumeric: number | null;
   title_a: string;
   title_b: string;
   /** All compare columns (strings) for full CSV export; keys match server CSV. */
@@ -202,18 +206,10 @@ function parseChangedFieldNames(changedFields: string): readonly string[] {
 /** Precompute lowercase search text (matches prior filter: all CSV cols + status delta + token). */
 function buildCompareRowSearchBlobLower(
   fullRow: Record<CompareFullCsvHeader, string>,
-  httpStatusA: number | string,
-  httpStatusB: number | string,
+  statusDeltaLabel: string,
 ): string {
-  const sa = numericStatusOrNull(httpStatusA);
-  const sb = numericStatusOrNull(httpStatusB);
-  let deltaTxt = "";
-  if (sa != null && sb != null) {
-    const d = sb - sa;
-    deltaTxt = `${d > 0 ? "+" : ""}${d}`;
-  }
   const base = COMPARE_FULL_CSV_HEADERS.map((h) => fullRow[h]).join("\n");
-  return `${base}\n${deltaTxt}\nstatus_delta`.toLowerCase();
+  return `${base}\n${statusDeltaLabel}\nstatus_delta`.toLowerCase();
 }
 
 function parseCompareApiRow(row: Record<string, unknown>): CompareDiffRow {
@@ -222,6 +218,15 @@ function parseCompareApiRow(row: Record<string, unknown>): CompareDiffRow {
   ) as Record<CompareFullCsvHeader, string>;
   const http_status_a = (row.http_status_a as number | string | undefined) ?? "";
   const http_status_b = (row.http_status_b as number | string | undefined) ?? "";
+  const sa = numericStatusOrNull(http_status_a);
+  const sb = numericStatusOrNull(http_status_b);
+  let statusDeltaNumeric: number | null = null;
+  let statusDeltaLabel = "";
+  if (sa != null && sb != null) {
+    const delta = sb - sa;
+    statusDeltaNumeric = delta;
+    statusDeltaLabel = `${delta > 0 ? "+" : ""}${delta}`;
+  }
   return {
     change_kind: fullRow.change_kind,
     changed_fields: fullRow.changed_fields,
@@ -229,19 +234,17 @@ function parseCompareApiRow(row: Record<string, unknown>): CompareDiffRow {
     url: fullRow.url,
     http_status_a,
     http_status_b,
+    statusDeltaLabel,
+    statusDeltaNumeric,
     title_a: fullRow.title_a,
     title_b: fullRow.title_b,
     fullRow,
-    searchBlobLower: buildCompareRowSearchBlobLower(fullRow, http_status_a, http_status_b),
+    searchBlobLower: buildCompareRowSearchBlobLower(fullRow, statusDeltaLabel),
   };
 }
 
 function compareRowStatusDeltaLabel(r: CompareDiffRow): string {
-  const sa = numericStatusOrNull(r.http_status_a);
-  const sb = numericStatusOrNull(r.http_status_b);
-  if (sa == null || sb == null) return "";
-  const delta = sb - sa;
-  return `${delta > 0 ? "+" : ""}${delta}`;
+  return r.statusDeltaLabel;
 }
 
 function compareThAriaSort(
@@ -1151,10 +1154,7 @@ export default function CrawlPage() {
         if (compareSortKey === "fields") return r.changed_fields;
         if (compareSortKey === "status_a") return Number(r.http_status_a || 0);
         if (compareSortKey === "status_delta") {
-          const sa = numericStatusOrNull(r.http_status_a);
-          const sb = numericStatusOrNull(r.http_status_b);
-          if (sa == null || sb == null) return -9999;
-          return sb - sa;
+          return r.statusDeltaNumeric == null ? -9999 : r.statusDeltaNumeric;
         }
         return Number(r.http_status_b || 0);
       };
