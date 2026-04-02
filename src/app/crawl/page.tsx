@@ -1303,6 +1303,27 @@ export default function CrawlPage() {
     [compareJobA, compareJobB],
   );
 
+  async function fetchCompareRowDetailsConcurrently(
+    rows: CompareDiffRow[],
+    concurrency: number,
+  ): Promise<CompareRowDetails[]> {
+    const out: CompareRowDetails[] = new Array(rows.length);
+    let next = 0;
+    const workerCount = Math.max(1, Math.min(concurrency, rows.length));
+
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const idx = next++;
+        if (idx >= rows.length) break;
+        const r = rows[idx];
+        out[idx] = await ensureCompareRowDetails(r.url_hash);
+      }
+    });
+
+    await Promise.all(workers);
+    return out;
+  }
+
   /** Home/End/Page/Arrow navigation within the current on-screen table page. Returns true if the key was handled. */
   const applyCompareTableRowNavKeys = useCallback(
     (e: { key: string; preventDefault: () => void }, rowIndex: number): boolean => {
@@ -2000,8 +2021,9 @@ export default function CrawlPage() {
     }
     try {
       const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
-      for (const r of filteredCompareRows) {
-        const details = await ensureCompareRowDetails(r.url_hash);
+      const detailsList = await fetchCompareRowDetailsConcurrently(filteredCompareRows, 6);
+      for (let i = 0; i < filteredCompareRows.length; i += 1) {
+        const details = detailsList[i];
         lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(details[h])).join(","));
       }
       const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -2031,8 +2053,9 @@ export default function CrawlPage() {
     }
     try {
       const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
-      for (const r of visibleSortedCompareRows) {
-        const details = await ensureCompareRowDetails(r.url_hash);
+      const detailsList = await fetchCompareRowDetailsConcurrently(visibleSortedCompareRows, 6);
+      for (let i = 0; i < visibleSortedCompareRows.length; i += 1) {
+        const details = detailsList[i];
         lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(details[h])).join(","));
       }
       const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
