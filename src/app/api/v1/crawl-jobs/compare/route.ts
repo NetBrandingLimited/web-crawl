@@ -130,18 +130,19 @@ export async function GET(req: Request) {
 
     function changedFieldsTokenList(ra: AuditRow, rb: AuditRow): string {
       const statusDiff = ra.httpStatus !== rb.httpStatus;
-      const titleDiff = normStr(ra.title) !== normStr(rb.title);
-      const canDiff = normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
-      const metaDiff = normStr(ra.metaDesc) !== normStr(rb.metaDesc);
+      const titleDiff = ra.title === rb.title ? false : normStr(ra.title) !== normStr(rb.title);
+      const canDiff = ra.canonicalUrl === rb.canonicalUrl ? false : normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
+      const metaDiff = ra.metaDesc === rb.metaDesc ? false : normStr(ra.metaDesc) !== normStr(rb.metaDesc);
       const wordDiff = ra.wordCount !== rb.wordCount;
-      const h1TextDiff = normStr(ra.h1Text) !== normStr(rb.h1Text);
+      const h1TextDiff = ra.h1Text === rb.h1Text ? false : normStr(ra.h1Text) !== normStr(rb.h1Text);
       const h1CountDiff = ra.h1Count !== rb.h1Count;
-      const contentTypeDiff = normStr(ra.contentType) !== normStr(rb.contentType);
-      const robotsDiff = normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
-      const metaRefreshDiff = normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
-      const contentHashDiff = normStr(ra.contentHash) !== normStr(rb.contentHash);
-      const xRobotsDiff = normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
-      const htmlLangDiff = normStr(ra.htmlLang) !== normStr(rb.htmlLang);
+      const contentTypeDiff = ra.contentType === rb.contentType ? false : normStr(ra.contentType) !== normStr(rb.contentType);
+      const robotsDiff = ra.robotsMeta === rb.robotsMeta ? false : normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
+      const metaRefreshDiff =
+        ra.metaRefreshContent === rb.metaRefreshContent ? false : normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
+      const contentHashDiff = ra.contentHash === rb.contentHash ? false : normStr(ra.contentHash) !== normStr(rb.contentHash);
+      const xRobotsDiff = ra.xRobotsTag === rb.xRobotsTag ? false : normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
+      const htmlLangDiff = ra.htmlLang === rb.htmlLang ? false : normStr(ra.htmlLang) !== normStr(rb.htmlLang);
       const responseTimeDiff = ra.responseTimeMs !== rb.responseTimeMs;
 
       const fields: string[] = [];
