@@ -596,9 +596,15 @@ export async function GET(req: Request) {
   }
 
   rows.sort((x, y) => {
-    const o = String(x.change_kind).localeCompare(String(y.change_kind));
+    const kindRank = (k: unknown) =>
+      k === "changed" ? 0 : k === "new_in_b" ? 1 : k === "removed_in_a" ? 2 : 999;
+    const o = kindRank(x.change_kind) - kindRank(y.change_kind);
     if (o !== 0) return o;
-    return String(x.url).localeCompare(String(y.url));
+    const ux = String(x.url);
+    const uy = String(y.url);
+    if (ux < uy) return -1;
+    if (ux > uy) return 1;
+    return 0;
   });
 
   if (format === "json") {
