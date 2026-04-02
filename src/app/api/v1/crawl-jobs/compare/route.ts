@@ -292,10 +292,19 @@ export async function GET(req: Request) {
   });
 
   if (format === "json") {
+    let newInB = 0;
+    let removedInA = 0;
+    let changed = 0;
+    for (const r of rows) {
+      const k = r.change_kind;
+      if (k === "new_in_b") newInB += 1;
+      else if (k === "removed_in_a") removedInA += 1;
+      else if (k === "changed") changed += 1;
+    }
     const counts = {
-      new_in_b: rows.filter((r) => r.change_kind === "new_in_b").length,
-      removed_in_a: rows.filter((r) => r.change_kind === "removed_in_a").length,
-      changed: rows.filter((r) => r.change_kind === "changed").length,
+      new_in_b: newInB,
+      removed_in_a: removedInA,
+      changed,
       pages_in_a: auditsA.length,
       pages_in_b: auditsB.length,
     };

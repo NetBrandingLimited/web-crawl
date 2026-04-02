@@ -167,6 +167,8 @@ const COMPARE_EXPAND_FIELD_PAIRS: Array<{
 type CompareDiffRow = {
   change_kind: string;
   changed_fields: string;
+  /** Parsed once for filters and chips (pipe-separated `changed_fields` from API). */
+  changedFieldNames: readonly string[];
   url: string;
   http_status_a: number | string;
   http_status_b: number | string;
@@ -174,27 +176,60 @@ type CompareDiffRow = {
   title_b: string;
   /** All compare columns (strings) for full CSV export; keys match server CSV. */
   fullRow: Record<CompareFullCsvHeader, string>;
+  /** Lowercase blob for client text search; built once per row when data loads. */
+  searchBlobLower: string;
 };
+
+function numericStatusOrNull(v: string | number): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function parseChangedFieldNames(changedFields: string): readonly string[] {
+  if (!changedFields) return [];
+  const out: string[] = [];
+  for (const part of changedFields.split("|")) {
+    const t = part.trim();
+    if (t) out.push(t);
+  }
+  return out;
+}
+
+/** Precompute lowercase search text (matches prior filter: all CSV cols + status delta + token). */
+function buildCompareRowSearchBlobLower(
+  fullRow: Record<CompareFullCsvHeader, string>,
+  httpStatusA: number | string,
+  httpStatusB: number | string,
+): string {
+  const sa = numericStatusOrNull(httpStatusA);
+  const sb = numericStatusOrNull(httpStatusB);
+  let deltaTxt = "";
+  if (sa != null && sb != null) {
+    const d = sb - sa;
+    deltaTxt = `${d > 0 ? "+" : ""}${d}`;
+  }
+  const base = COMPARE_FULL_CSV_HEADERS.map((h) => fullRow[h]).join("\n");
+  return `${base}\n${deltaTxt}\nstatus_delta`.toLowerCase();
+}
 
 function parseCompareApiRow(row: Record<string, unknown>): CompareDiffRow {
   const fullRow = Object.fromEntries(
     COMPARE_FULL_CSV_HEADERS.map((h) => [h, String(row[h] ?? "")]),
   ) as Record<CompareFullCsvHeader, string>;
+  const http_status_a = (row.http_status_a as number | string | undefined) ?? "";
+  const http_status_b = (row.http_status_b as number | string | undefined) ?? "";
   return {
     change_kind: fullRow.change_kind,
     changed_fields: fullRow.changed_fields,
+    changedFieldNames: parseChangedFieldNames(fullRow.changed_fields),
     url: fullRow.url,
-    http_status_a: (row.http_status_a as number | string | undefined) ?? "",
-    http_status_b: (row.http_status_b as number | string | undefined) ?? "",
+    http_status_a,
+    http_status_b,
     title_a: fullRow.title_a,
     title_b: fullRow.title_b,
     fullRow,
+    searchBlobLower: buildCompareRowSearchBlobLower(fullRow, http_status_a, http_status_b),
   };
-}
-
-function numericStatusOrNull(v: string | number): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function compareRowStatusDeltaLabel(r: CompareDiffRow): string {
@@ -1019,10 +1054,7 @@ export default function CrawlPage() {
     const q = compareTableFilterText.trim().toLowerCase();
     return rows.filter((r) => {
       if (kind !== "all" && r.change_kind !== kind) return false;
-      const fields = r.changed_fields
-        .split("|")
-        .map((f) => f.trim())
-        .filter(Boolean);
+      const fields = r.changedFieldNames;
       if (compareFieldAnyOf && compareFieldAnyOf.length > 0) {
         if (r.change_kind === "changed") {
           if (!compareFieldAnyOf.some((f) => fields.includes(f))) return false;
@@ -1036,10 +1068,7 @@ export default function CrawlPage() {
         if (!fields.includes("status")) return false;
       }
       if (!q) return true;
-      const deltaTxt = compareRowStatusDeltaLabel(r);
-      const blob =
-        `${COMPARE_FULL_CSV_HEADERS.map((h) => r.fullRow[h]).join("\n")}\n${deltaTxt}\nstatus_delta`.toLowerCase();
-      return blob.includes(q);
+      return r.searchBlobLower.includes(q);
     });
   }, [
     compareDiffPreview?.rows,
@@ -2933,13 +2962,9 @@ export default function CrawlPage() {
                                 </div>
                               </td>
                               <td className="px-3 py-2">
-                                {r.changed_fields ? (
+                                {r.changedFieldNames.length > 0 ? (
                                   <div className="flex flex-wrap gap-1">
-                                    {r.changed_fields
-                                      .split("|")
-                                      .map((f) => f.trim())
-                                      .filter(Boolean)
-                                      .map((f) => (
+                                    {r.changedFieldNames.map((f) => (
                                         <button
                                           key={`${r.url}:${f}`}
                                           type="button"
