@@ -122,6 +122,7 @@ export async function GET(req: Request) {
       rows.push({
         change_kind: "new_in_b",
         changed_fields: "",
+        url_hash: h,
         url: rb.url,
         depth_a: "",
         depth_b: rb.depth,
@@ -162,6 +163,7 @@ export async function GET(req: Request) {
       rows.push({
         change_kind: "removed_in_a",
         changed_fields: "",
+        url_hash: h,
         url: ra.url,
         depth_a: ra.depth,
         depth_b: "",
@@ -251,6 +253,7 @@ export async function GET(req: Request) {
     rows.push({
       change_kind: "changed",
       changed_fields: fields.join("|"),
+      url_hash: h,
       url: ra.url,
       depth_a: ra.depth,
       depth_b: rb.depth,
@@ -342,6 +345,18 @@ export async function GET(req: Request) {
     const pageRows = rows.slice(offset, offset + pageLimit);
     const nextOffset = offset + pageRows.length;
     const next_cursor = nextOffset < totalDiffRows ? encodeCompareJsonCursor(nextOffset) : null;
+    // Lightweight payload for the Phase 2 preview: enough to render/sort/filter the table.
+    // Expanded A/B details are fetched lazily per row.
+    const previewRows = pageRows.map((r) => ({
+      url_hash: r.url_hash,
+      change_kind: r.change_kind,
+      changed_fields: r.changed_fields,
+      url: r.url,
+      http_status_a: r.http_status_a,
+      http_status_b: r.http_status_b,
+      title_a: r.title_a,
+      title_b: r.title_b,
+    }));
     return NextResponse.json({
       job_a: jobA,
       job_b: jobB,
@@ -349,7 +364,7 @@ export async function GET(req: Request) {
       total_diff_rows: totalDiffRows,
       limit: pageLimit,
       offset,
-      rows: pageRows,
+      rows: previewRows,
       next_cursor,
     });
   }

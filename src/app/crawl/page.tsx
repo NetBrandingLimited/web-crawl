@@ -173,6 +173,8 @@ type CompareDiffRow = {
   changed_fields: string;
   /** Parsed once for filters and chips (pipe-separated `changed_fields` from API). */
   changedFieldNames: readonly string[];
+  /** Unique audit key (same value stored as `urlHash` in the DB). */
+  url_hash: string;
   url: string;
   http_status_a: number | string;
   http_status_b: number | string;
@@ -182,11 +184,11 @@ type CompareDiffRow = {
   statusDeltaNumeric: number | null;
   title_a: string;
   title_b: string;
-  /** All compare columns (strings) for full CSV export; keys match server CSV. */
-  fullRow: Record<CompareFullCsvHeader, string>;
   /** Lowercase blob for client text search; built once per row when data loads. */
   searchBlobLower: string;
 };
+
+type CompareRowDetails = Record<CompareFullCsvHeader, string>;
 
 function numericStatusOrNull(v: string | number): number | null {
   const n = Number(v);
@@ -203,21 +205,28 @@ function parseChangedFieldNames(changedFields: string): readonly string[] {
   return out;
 }
 
-/** Precompute lowercase search text (matches prior filter: all CSV cols + status delta + token). */
-function buildCompareRowSearchBlobLower(
-  fullRow: Record<CompareFullCsvHeader, string>,
-  statusDeltaLabel: string,
-): string {
-  const base = COMPARE_FULL_CSV_HEADERS.map((h) => fullRow[h]).join("\n");
-  return `${base}\n${statusDeltaLabel}\nstatus_delta`.toLowerCase();
+/** Precompute lowercase search text for the compare table text filter. */
+function buildCompareRowSearchBlobLower(params: {
+  url: string;
+  title_a: string;
+  title_b: string;
+  changed_fields: string;
+  statusDeltaLabel: string;
+}): string {
+  const { url, title_a, title_b, changed_fields, statusDeltaLabel } = params;
+  // Keep the search aligned with the UI placeholder: URL/title/fields + status delta.
+  return `${url}\n${title_a}\n${title_b}\n${changed_fields}\n${statusDeltaLabel}\nstatus_delta`.toLowerCase();
 }
 
 function parseCompareApiRow(row: Record<string, unknown>): CompareDiffRow {
-  const fullRow = Object.fromEntries(
-    COMPARE_FULL_CSV_HEADERS.map((h) => [h, String(row[h] ?? "")]),
-  ) as Record<CompareFullCsvHeader, string>;
   const http_status_a = (row.http_status_a as number | string | undefined) ?? "";
   const http_status_b = (row.http_status_b as number | string | undefined) ?? "";
+  const url_hash = (row.url_hash as string | undefined) ?? "";
+  const change_kind = (row.change_kind as string | undefined) ?? "";
+  const changed_fields = (row.changed_fields as string | undefined) ?? "";
+  const url = (row.url as string | undefined) ?? "";
+  const title_a = (row.title_a as string | undefined) ?? "";
+  const title_b = (row.title_b as string | undefined) ?? "";
   const sa = numericStatusOrNull(http_status_a);
   const sb = numericStatusOrNull(http_status_b);
   let statusDeltaNumeric: number | null = null;
@@ -228,18 +237,24 @@ function parseCompareApiRow(row: Record<string, unknown>): CompareDiffRow {
     statusDeltaLabel = `${delta > 0 ? "+" : ""}${delta}`;
   }
   return {
-    change_kind: fullRow.change_kind,
-    changed_fields: fullRow.changed_fields,
-    changedFieldNames: parseChangedFieldNames(fullRow.changed_fields),
-    url: fullRow.url,
+    change_kind,
+    changed_fields,
+    changedFieldNames: parseChangedFieldNames(changed_fields),
+    url_hash,
+    url,
     http_status_a,
     http_status_b,
     statusDeltaLabel,
     statusDeltaNumeric,
-    title_a: fullRow.title_a,
-    title_b: fullRow.title_b,
-    fullRow,
-    searchBlobLower: buildCompareRowSearchBlobLower(fullRow, statusDeltaLabel),
+    title_a,
+    title_b,
+    searchBlobLower: buildCompareRowSearchBlobLower({
+      url,
+      title_a,
+      title_b,
+      changed_fields,
+      statusDeltaLabel,
+    }),
   };
 }
 
@@ -698,6 +713,12 @@ export default function CrawlPage() {
   /** After `[` / `]` change the result table page, focus first visible row (see useLayoutEffect). */
   const compareBracketPageNavRef = useRef(false);
   const visibleSortedCompareRowsRef = useRef<CompareDiffRow[]>([]);
+  // Expanded A/B panel details are fetched lazily per row (keyed by url_hash).
+  const [compareRowDetailsCache, setCompareRowDetailsCache] = useState<Record<string, CompareRowDetails>>({});
+  const [compareRowDetailsLoading, setCompareRowDetailsLoading] = useState<Record<string, boolean>>({});
+  const [compareRowDetailsError, setCompareRowDetailsError] = useState<Record<string, string>>({});
+  const compareRowDetailsInFlightRef = useRef<Map<string, Promise<CompareRowDetails>>>(new Map());
+  const compareRowDetailsCacheRef = useRef(compareRowDetailsCache);
   const [urlTableFilter, setUrlTableFilter] = useState("");
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
   const [jobsListLoading, setJobsListLoading] = useState(false);
@@ -1091,7 +1112,16 @@ export default function CrawlPage() {
   useEffect(() => {
     setExpandedCompareRowKeys(new Set());
     setCompareUrlListCopyNotice(null);
+    setCompareRowDetailsCache({});
+    setCompareRowDetailsLoading({});
+    setCompareRowDetailsError({});
+    compareRowDetailsInFlightRef.current.clear();
+    setComparePreviewStaleHint(false);
   }, [compareJobA, compareJobB]);
+
+  useEffect(() => {
+    compareRowDetailsCacheRef.current = compareRowDetailsCache;
+  }, [compareRowDetailsCache]);
 
   useEffect(() => {
     const q = compareTableFilterText.trim().toLowerCase();
@@ -1213,6 +1243,65 @@ export default function CrawlPage() {
       compareMainRowTrRefs.current.get(key)?.focus({ preventScroll: true });
     });
   }, [visibleSortedCompareRows]);
+
+  const ensureCompareRowDetails = useCallback(
+    async (urlHash: string): Promise<CompareRowDetails> => {
+      if (!compareJobA || !compareJobB || compareJobA === compareJobB) {
+        throw new Error("Missing compare jobs for details fetch.");
+      }
+      const cached = compareRowDetailsCacheRef.current[urlHash];
+      if (cached) return cached;
+      const inflight = compareRowDetailsInFlightRef.current.get(urlHash);
+      if (inflight) return inflight;
+
+      const p = (async () => {
+        setCompareRowDetailsLoading((prev) => ({ ...prev, [urlHash]: true }));
+        setCompareRowDetailsError((prev) => {
+          if (!prev[urlHash]) return prev;
+          const next = { ...prev };
+          delete next[urlHash];
+          return next;
+        });
+
+        try {
+          const u = `/api/v1/crawl-jobs/compare/row?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(
+            compareJobB,
+          )}&url_hash=${encodeURIComponent(urlHash)}`;
+          const res = await fetch(u, { cache: "no-store" });
+          if (!res.ok) {
+            const detail = (await res.text().catch(() => "")).trim();
+            throw new Error(`HTTP ${res.status}${detail ? `: ${detail.slice(0, 180)}` : ""}`);
+          }
+          const json = (await res.json()) as { row?: Record<string, unknown> };
+          const row = json.row ?? {};
+          const details = Object.fromEntries(
+            COMPARE_FULL_CSV_HEADERS.map((h) => [h, String((row as Record<string, unknown>)[h] ?? "")]),
+          ) as CompareRowDetails;
+
+          setCompareRowDetailsCache((prev) => ({ ...prev, [urlHash]: details }));
+          return details;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Could not load compare row details.";
+          setCompareRowDetailsError((prev) => ({ ...prev, [urlHash]: msg }));
+          throw e;
+        }
+      })();
+
+      compareRowDetailsInFlightRef.current.set(urlHash, p);
+      p.finally(() => {
+        compareRowDetailsInFlightRef.current.delete(urlHash);
+        setCompareRowDetailsLoading((prev) => {
+          if (!prev[urlHash]) return prev;
+          const next = { ...prev };
+          delete next[urlHash];
+          return next;
+        });
+      });
+
+      return p;
+    },
+    [compareJobA, compareJobB],
+  );
 
   /** Home/End/Page/Arrow navigation within the current on-screen table page. Returns true if the key was handled. */
   const applyCompareTableRowNavKeys = useCallback(
@@ -1367,7 +1456,7 @@ export default function CrawlPage() {
       setError("No compare rows match the current filters.");
       return;
     }
-    downloadFilteredCompareFullCsv();
+    void downloadFilteredCompareFullCsv();
     setCompareExportAfterAutoLoad(false);
     setCompareAutoLoadAll(false);
   }, [compareAutoLoadAll, compareDiffPreview, compareExportAfterAutoLoad, filteredCompareRows.length]);
@@ -1899,7 +1988,7 @@ export default function CrawlPage() {
     URL.revokeObjectURL(objectUrl);
   }
 
-  function downloadFilteredCompareFullCsv() {
+  async function downloadFilteredCompareFullCsv() {
     setError(null);
     if (!compareJobA || !compareJobB) {
       setError("Choose baseline job (A) and compare job (B).");
@@ -1909,23 +1998,28 @@ export default function CrawlPage() {
       setError("No compare rows match the current filters.");
       return;
     }
-    const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
-    for (const r of filteredCompareRows) {
-      lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(r.fullRow[h])).join(","));
+    try {
+      const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
+      for (const r of filteredCompareRows) {
+        const details = await ensureCompareRowDetails(r.url_hash);
+        lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(details[h])).join(","));
+      }
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `crawl-compare-filtered-full-${compareJobA.slice(0, 8)}-${compareJobB.slice(0, 8)}.csv`;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      setError(describeFetchFailure(e, "Download filtered compare full CSV"));
     }
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = `crawl-compare-filtered-full-${compareJobA.slice(0, 8)}-${compareJobB.slice(0, 8)}.csv`;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
   }
 
-  function downloadVisibleComparePageCsv() {
+  async function downloadVisibleComparePageCsv() {
     setError(null);
     if (!compareJobA || !compareJobB) {
       setError("Choose baseline job (A) and compare job (B).");
@@ -1935,20 +2029,25 @@ export default function CrawlPage() {
       setError("No compare rows on the current page.");
       return;
     }
-    const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
-    for (const r of visibleSortedCompareRows) {
-      lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(r.fullRow[h])).join(","));
+    try {
+      const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
+      for (const r of visibleSortedCompareRows) {
+        const details = await ensureCompareRowDetails(r.url_hash);
+        lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(details[h])).join(","));
+      }
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `crawl-compare-page-${compareTablePage}-${compareJobA.slice(0, 8)}-${compareJobB.slice(0, 8)}.csv`;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      setError(describeFetchFailure(e, "Download visible compare page CSV"));
     }
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = `crawl-compare-page-${compareTablePage}-${compareJobA.slice(0, 8)}-${compareJobB.slice(0, 8)}.csv`;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
   }
 
   function autoLoadAllAndExportFilteredCsv() {
@@ -2170,6 +2269,86 @@ export default function CrawlPage() {
     } finally {
       setJobDeleteBusy(null);
     }
+  }
+
+  function CompareExpandedRowTr({
+    r,
+    rowKey,
+    rowIndexOnPage,
+    detailRegionId,
+  }: {
+    r: CompareDiffRow;
+    rowKey: string;
+    rowIndexOnPage: number;
+    detailRegionId: string;
+  }) {
+    const urlHash = r.url_hash;
+    const details = compareRowDetailsCache[urlHash];
+    const loading = compareRowDetailsLoading[urlHash];
+    const detailsError = compareRowDetailsError[urlHash];
+
+    useEffect(() => {
+      if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
+      if (details || loading) return;
+      void ensureCompareRowDetails(urlHash).catch(() => {});
+    }, [urlHash, details, loading, compareJobA, compareJobB]);
+
+    return (
+      <tr className="bg-zinc-50/80">
+        <td colSpan={5} className="px-3 py-3">
+          <div
+            id={detailRegionId}
+            role="region"
+            tabIndex={0}
+            aria-label={`Baseline A and crawl B field values for ${r.url}`}
+            className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/45 focus-visible:ring-offset-1 md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]"
+            onKeyDownCapture={(e) => {
+              if (tryCompareTableBracketPageNav(e as any)) {
+                e.stopPropagation();
+                return;
+              }
+              if (applyCompareTableRowNavKeys(e as any, rowIndexOnPage)) {
+                e.stopPropagation();
+                return;
+              }
+              if (e.key !== "Escape") return;
+              e.preventDefault();
+              e.stopPropagation();
+              toggleCompareRowExpanded(rowKey);
+              focusCompareMainRowTr(rowKey);
+            }}
+          >
+            <div className="border-b border-zinc-200 pb-1 font-semibold text-zinc-600">Field</div>
+            <div className="border-b border-zinc-200 pb-1 font-mono font-semibold text-zinc-600">A (baseline)</div>
+            <div className="border-b border-zinc-200 pb-1 font-mono font-semibold text-zinc-600">B (compare)</div>
+
+            {loading && !details ? (
+              <div className="col-span-3 py-2 text-xs text-zinc-500">Loading details…</div>
+            ) : detailsError ? (
+              <div className="col-span-3 py-2 text-xs text-red-600">{detailsError}</div>
+            ) : (
+              COMPARE_EXPAND_FIELD_PAIRS.map((p) => {
+                const va = details?.[p.a] ?? "";
+                const vb = details?.[p.b] ?? "";
+                const diff = va !== vb;
+                if (compareExpandOnlyChangedFields && !diff) return null;
+                return (
+                  <Fragment key={p.label}>
+                    <div className={`py-0.5 font-medium ${diff ? "text-zinc-900" : "text-zinc-500"}`}>{p.label}</div>
+                    <div className={`break-words py-0.5 font-mono ${diff ? "text-zinc-900" : "text-zinc-600"}`}>
+                      {va === "" ? "—" : va}
+                    </div>
+                    <div className={`break-words py-0.5 font-mono ${diff ? "text-zinc-900" : "text-zinc-600"}`}>
+                      {vb === "" ? "—" : vb}
+                    </div>
+                  </Fragment>
+                );
+              })
+            )}
+          </div>
+        </td>
+      </tr>
+    );
   }
 
   return (
@@ -2853,7 +3032,7 @@ export default function CrawlPage() {
                 <button
                   type="button"
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
-                  onClick={() => downloadFilteredCompareFullCsv()}
+                  onClick={() => void downloadFilteredCompareFullCsv()}
                   disabled={filteredCompareRows.length === 0}
                 >
                   Download filtered full CSV
@@ -2861,7 +3040,7 @@ export default function CrawlPage() {
                 <button
                   type="button"
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
-                  onClick={() => downloadVisibleComparePageCsv()}
+                  onClick={() => void downloadVisibleComparePageCsv()}
                   disabled={visibleSortedCompareRows.length === 0}
                 >
                   Download current page CSV
@@ -3230,63 +3409,12 @@ export default function CrawlPage() {
                               <td className="px-3 py-2 font-mono">{deltaStr === "" ? "—" : deltaStr}</td>
                             </tr>
                             {open ? (
-                              <tr className="bg-zinc-50/80">
-                                <td colSpan={5} className="px-3 py-3">
-                                  <div
-                                    id={detailRegionId}
-                                    role="region"
-                                    tabIndex={0}
-                                    aria-label={`Baseline A and crawl B field values for ${r.url}`}
-                                    className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/45 focus-visible:ring-offset-1 md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]"
-                                    onKeyDownCapture={(e) => {
-                                      if (tryCompareTableBracketPageNav(e)) {
-                                        e.stopPropagation();
-                                        return;
-                                      }
-                                      if (applyCompareTableRowNavKeys(e, i)) {
-                                        e.stopPropagation();
-                                        return;
-                                      }
-                                      if (e.key !== "Escape") return;
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      toggleCompareRowExpanded(rowKey);
-                                      focusCompareMainRowTr(rowKey);
-                                    }}
-                                  >
-                                    <div className="border-b border-zinc-200 pb-1 font-semibold text-zinc-600">Field</div>
-                                    <div className="border-b border-zinc-200 pb-1 font-mono font-semibold text-zinc-600">
-                                      A (baseline)
-                                    </div>
-                                    <div className="border-b border-zinc-200 pb-1 font-mono font-semibold text-zinc-600">
-                                      B (compare)
-                                    </div>
-                                    {COMPARE_EXPAND_FIELD_PAIRS.map((p) => {
-                                      const va = r.fullRow[p.a];
-                                      const vb = r.fullRow[p.b];
-                                      const diff = va !== vb;
-                                      if (compareExpandOnlyChangedFields && !diff) return null;
-                                      return (
-                                        <Fragment key={p.label}>
-                                          <div className={`py-0.5 font-medium ${diff ? "text-zinc-900" : "text-zinc-500"}`}>
-                                            {p.label}
-                                          </div>
-                                          <div
-                                            className={`break-words py-0.5 font-mono ${diff ? "text-zinc-900" : "text-zinc-600"}`}
-                                          >
-                                            {va === "" ? "—" : va}
-                                          </div>
-                                          <div
-                                            className={`break-words py-0.5 font-mono ${diff ? "text-zinc-900" : "text-zinc-600"}`}
-                                          >
-                                            {vb === "" ? "—" : vb}
-                                          </div>
-                                        </Fragment>
-                                      );
-                                    })}
-                                  </div>
-                                </td>
-                              </tr>
+                              <CompareExpandedRowTr
+                                r={r}
+                                rowKey={rowKey}
+                                rowIndexOnPage={i}
+                                detailRegionId={detailRegionId}
+                              />
                             ) : null}
                           </Fragment>
                         );
