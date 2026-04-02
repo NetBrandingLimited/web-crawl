@@ -682,6 +682,8 @@ export default function CrawlPage() {
   const [comparePreviewError, setComparePreviewError] = useState<string | null>(null);
   /** Bump to re-run the debounced compare preview fetch without changing job ids (Retry button). */
   const [comparePreviewRetryNonce, setComparePreviewRetryNonce] = useState(0);
+  /** True after dismissing a preview error so we can show a neutral “load preview” call-to-action without flashing on first job select. */
+  const [comparePreviewStaleHint, setComparePreviewStaleHint] = useState(false);
   const [compareAutoLoadAll, setCompareAutoLoadAll] = useState(false);
   const [compareExportAfterAutoLoad, setCompareExportAfterAutoLoad] = useState(false);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
@@ -991,12 +993,14 @@ export default function CrawlPage() {
       setCompareDiffPreview(null);
       setCompareLoadMoreError(null);
       setComparePreviewError(null);
+      setComparePreviewStaleHint(false);
       setCompareAutoLoadAll(false);
       setCompareExportAfterAutoLoad(false);
       return;
     }
     setCompareLoadMoreError(null);
     setComparePreviewError(null);
+    setComparePreviewStaleHint(false);
     setCompareDiffPreview({
       loading: true,
       loadingMore: false,
@@ -1046,6 +1050,7 @@ export default function CrawlPage() {
             const nextC = json.next_cursor;
             const total = json.total_diff_rows;
             setComparePreviewError(null);
+            setComparePreviewStaleHint(false);
             setCompareDiffPreview({
               loading: false,
               loadingMore: false,
@@ -1822,6 +1827,7 @@ export default function CrawlPage() {
     setCompareDiffPreview(null);
     setCompareLoadMoreError(null);
     setComparePreviewError(null);
+    setComparePreviewStaleHint(false);
     setCompareJobA("");
     setCompareJobB("");
   }
@@ -2378,7 +2384,10 @@ export default function CrawlPage() {
                   type="button"
                   className="rounded-md border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-100/80"
                   aria-label="Dismiss compare preview error"
-                  onClick={() => setComparePreviewError(null)}
+                  onClick={() => {
+                    setComparePreviewError(null);
+                    setComparePreviewStaleHint(true);
+                  }}
                 >
                   Dismiss
                 </button>
@@ -2391,6 +2400,27 @@ export default function CrawlPage() {
                   Retry
                 </button>
               </div>
+            </div>
+          ) : null}
+          {comparePreviewStaleHint &&
+          compareJobA &&
+          compareJobB &&
+          compareJobA !== compareJobB &&
+          compareDiffPreview == null &&
+          !comparePreviewError ? (
+            <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+              <span>Compare preview is not on screen.</span>{" "}
+              <button
+                type="button"
+                className="font-medium text-zinc-900 underline decoration-zinc-400/80 underline-offset-2 hover:decoration-zinc-900"
+                aria-label="Load compare preview for selected jobs"
+                onClick={() => {
+                  setComparePreviewStaleHint(false);
+                  setComparePreviewRetryNonce((n) => n + 1);
+                }}
+              >
+                Load preview
+              </button>
             </div>
           ) : null}
           {compareDiffPreview && (compareDiffPreview.loading || compareDiffPreview.counts) ? (
