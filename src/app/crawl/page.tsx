@@ -2361,19 +2361,29 @@ export default function CrawlPage() {
           compareJobA !== compareJobB &&
           !compareDiffPreview?.loading ? (
             <div
-              className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+              className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
               role="alert"
               aria-live="assertive"
             >
-              <span className="min-w-0 flex-1">{comparePreviewError}</span>
-              <button
-                type="button"
-                className="shrink-0 rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-100"
-                aria-label="Retry loading compare preview"
-                onClick={() => setComparePreviewRetryNonce((n) => n + 1)}
-              >
-                Retry
-              </button>
+              <span className="min-w-0 flex-1 basis-[min(100%,28rem)]">{comparePreviewError}</span>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-100/80"
+                  aria-label="Dismiss compare preview error"
+                  onClick={() => setComparePreviewError(null)}
+                >
+                  Dismiss
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-100"
+                  aria-label="Retry loading compare preview"
+                  onClick={() => setComparePreviewRetryNonce((n) => n + 1)}
+                >
+                  Retry
+                </button>
+              </div>
             </div>
           ) : null}
           {compareDiffPreview && (compareDiffPreview.loading || compareDiffPreview.counts) ? (
@@ -3316,9 +3326,19 @@ export default function CrawlPage() {
                   </button>
                 </div>
               </div>
-              {sortedFilteredCompareRows.length > compareTablePageSize ? (
-                <div className="border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
-                  Tip: use sort + filters to focus priority rows, then page through remaining results.
+              {sortedFilteredCompareRows.length > compareTablePageSize || compareTableTotalPages > 1 ? (
+                <div className="space-y-1 border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
+                  {sortedFilteredCompareRows.length > compareTablePageSize ? (
+                    <p>Tip: use sort + filters to focus priority rows, then page through remaining results.</p>
+                  ) : null}
+                  {compareTableTotalPages > 1 ? (
+                    <p>
+                      With a compare row or expanded details focused, <kbd className="rounded border border-zinc-200 bg-zinc-100 px-1 py-px font-mono text-[10px]">[</kbd>{" "}
+                      and{" "}
+                      <kbd className="rounded border border-zinc-200 bg-zinc-100 px-1 py-px font-mono text-[10px]">]</kbd>{" "}
+                      move between filtered result pages (same as the pagination controls).
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>
