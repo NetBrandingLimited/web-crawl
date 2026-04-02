@@ -128,6 +128,60 @@ export async function GET(req: Request) {
       title_b: string;
     };
 
+    function changedFieldsTokenList(ra: AuditRow, rb: AuditRow): string {
+      const statusDiff = ra.httpStatus !== rb.httpStatus;
+      const titleDiff = normStr(ra.title) !== normStr(rb.title);
+      const canDiff = normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
+      const metaDiff = normStr(ra.metaDesc) !== normStr(rb.metaDesc);
+      const wordDiff = ra.wordCount !== rb.wordCount;
+      const h1TextDiff = normStr(ra.h1Text) !== normStr(rb.h1Text);
+      const h1CountDiff = ra.h1Count !== rb.h1Count;
+      const contentTypeDiff = normStr(ra.contentType) !== normStr(rb.contentType);
+      const robotsDiff = normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
+      const metaRefreshDiff = normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
+      const contentHashDiff = normStr(ra.contentHash) !== normStr(rb.contentHash);
+      const xRobotsDiff = normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
+      const htmlLangDiff = normStr(ra.htmlLang) !== normStr(rb.htmlLang);
+      const responseTimeDiff = ra.responseTimeMs !== rb.responseTimeMs;
+
+      const fields: string[] = [];
+      if (statusDiff) fields.push("status");
+      if (titleDiff) fields.push("title");
+      if (canDiff) fields.push("canonical");
+      if (metaDiff) fields.push("meta_description");
+      if (wordDiff) fields.push("word_count");
+      if (h1TextDiff) fields.push("h1_text");
+      if (h1CountDiff) fields.push("h1_count");
+      if (contentTypeDiff) fields.push("content_type");
+      if (robotsDiff) fields.push("robots_meta");
+      if (metaRefreshDiff) fields.push("meta_refresh");
+      if (contentHashDiff) fields.push("content_hash");
+      if (xRobotsDiff) fields.push("x_robots_tag");
+      if (htmlLangDiff) fields.push("html_lang");
+      if (responseTimeDiff) fields.push("response_time_ms");
+
+      return fields.join("|");
+    }
+
+    function rowHasAnyDiff(ra: AuditRow, rb: AuditRow): boolean {
+      // Early-exit: once any difference is found, we can treat the row as changed.
+      if (ra.httpStatus !== rb.httpStatus) return true;
+      if (normStr(ra.title) !== normStr(rb.title)) return true;
+      if (normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl)) return true;
+      if (normStr(ra.metaDesc) !== normStr(rb.metaDesc)) return true;
+      if (ra.wordCount !== rb.wordCount) return true;
+      if (normStr(ra.h1Text) !== normStr(rb.h1Text)) return true;
+      if (ra.h1Count !== rb.h1Count) return true;
+      if (normStr(ra.contentType) !== normStr(rb.contentType)) return true;
+      if (normStr(ra.robotsMeta) !== normStr(rb.robotsMeta)) return true;
+      if (normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent)) return true;
+      if (normStr(ra.contentHash) !== normStr(rb.contentHash)) return true;
+      if (normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag)) return true;
+      if (normStr(ra.htmlLang) !== normStr(rb.htmlLang)) return true;
+      if (ra.responseTimeMs !== rb.responseTimeMs) return true;
+      return false;
+    }
+
     const previewRows: PreviewRow[] = [];
 
     for (const [h, rb] of mapB) {
@@ -164,57 +218,12 @@ export async function GET(req: Request) {
       const rb = mapB.get(h);
       if (!rb) continue;
 
-      const statusDiff = ra.httpStatus !== rb.httpStatus;
-      const titleDiff = normStr(ra.title) !== normStr(rb.title);
-      const canDiff = normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
-      const metaDiff = normStr(ra.metaDesc) !== normStr(rb.metaDesc);
-      const wordDiff = ra.wordCount !== rb.wordCount;
-      const h1TextDiff = normStr(ra.h1Text) !== normStr(rb.h1Text);
-      const h1CountDiff = ra.h1Count !== rb.h1Count;
-      const contentTypeDiff = normStr(ra.contentType) !== normStr(rb.contentType);
-      const robotsDiff = normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
-      const metaRefreshDiff = normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
-      const contentHashDiff = normStr(ra.contentHash) !== normStr(rb.contentHash);
-      const xRobotsDiff = normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
-      const htmlLangDiff = normStr(ra.htmlLang) !== normStr(rb.htmlLang);
-      const responseTimeDiff = ra.responseTimeMs !== rb.responseTimeMs;
-      if (
-        !statusDiff &&
-        !titleDiff &&
-        !canDiff &&
-        !metaDiff &&
-        !wordDiff &&
-        !h1TextDiff &&
-        !h1CountDiff &&
-        !contentTypeDiff &&
-        !robotsDiff &&
-        !metaRefreshDiff &&
-        !contentHashDiff &&
-        !xRobotsDiff &&
-        !htmlLangDiff &&
-        !responseTimeDiff
-      )
-        continue;
-
-      const fields: string[] = [];
-      if (statusDiff) fields.push("status");
-      if (titleDiff) fields.push("title");
-      if (canDiff) fields.push("canonical");
-      if (metaDiff) fields.push("meta_description");
-      if (wordDiff) fields.push("word_count");
-      if (h1TextDiff) fields.push("h1_text");
-      if (h1CountDiff) fields.push("h1_count");
-      if (contentTypeDiff) fields.push("content_type");
-      if (robotsDiff) fields.push("robots_meta");
-      if (metaRefreshDiff) fields.push("meta_refresh");
-      if (contentHashDiff) fields.push("content_hash");
-      if (xRobotsDiff) fields.push("x_robots_tag");
-      if (htmlLangDiff) fields.push("html_lang");
-      if (responseTimeDiff) fields.push("response_time_ms");
+      if (!rowHasAnyDiff(ra, rb)) continue;
 
       previewRows.push({
         change_kind: "changed",
-        changed_fields: fields.join("|"),
+        // Defer computing `changed_fields` until we know this row is in the current page slice.
+        changed_fields: "",
         url_hash: h,
         url: ra.url,
         http_status_a: ra.httpStatus ?? "",
@@ -268,6 +277,15 @@ export async function GET(req: Request) {
     }
 
     const pageRows = previewRows.slice(offset, offset + pageLimit);
+
+    // Fill in `changed_fields` only for rows that are actually returned.
+    for (const pr of pageRows) {
+      if (pr.change_kind !== "changed") continue;
+      const ra = mapA.get(pr.url_hash);
+      const rb = mapB.get(pr.url_hash);
+      if (!ra || !rb) continue;
+      pr.changed_fields = changedFieldsTokenList(ra, rb);
+    }
     const nextOffset = offset + pageRows.length;
     const next_cursor = nextOffset < totalDiffRows ? encodeCompareJsonCursor(nextOffset) : null;
 
