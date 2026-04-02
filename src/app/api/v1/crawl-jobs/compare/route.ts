@@ -233,10 +233,17 @@ export async function GET(req: Request) {
       });
     }
 
+    // Performance: avoid `localeCompare` inside a hot `sort` comparator.
+    // Keep the same ordering as the previous lexicographic `change_kind` comparison:
+    // "changed" < "new_in_b" < "removed_in_a", then by `url`.
+    const kindRank = (k: PreviewRow["change_kind"]) => (k === "changed" ? 0 : k === "new_in_b" ? 1 : 2);
     previewRows.sort((x, y) => {
-      const o = String(x.change_kind).localeCompare(String(y.change_kind));
+      const o = kindRank(x.change_kind) - kindRank(y.change_kind);
       if (o !== 0) return o;
-      return String(x.url).localeCompare(String(y.url));
+      // URL strings are typically ASCII; `<`/`>` is fast and deterministic for same runtime.
+      if (x.url < y.url) return -1;
+      if (x.url > y.url) return 1;
+      return 0;
     });
 
     let newInB = 0;
