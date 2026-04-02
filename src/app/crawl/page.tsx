@@ -724,6 +724,11 @@ export default function CrawlPage() {
   const compareRowDetailsActiveCountRef = useRef(0);
   const compareRowDetailsQueueRef = useRef<Array<() => void>>([]);
   const compareDetailsJobNonceRef = useRef(0);
+  const [compareExportDetailsProgress, setCompareExportDetailsProgress] = useState<{
+    label: string;
+    loaded: number;
+    total: number;
+  } | null>(null);
   const [urlTableFilter, setUrlTableFilter] = useState("");
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
   const [jobsListLoading, setJobsListLoading] = useState(false);
@@ -1348,10 +1353,12 @@ export default function CrawlPage() {
   async function fetchCompareRowDetailsConcurrently(
     rows: CompareDiffRow[],
     concurrency: number,
+    onProgress?: (loaded: number, total: number) => void,
   ): Promise<CompareRowDetails[]> {
     const out: CompareRowDetails[] = new Array(rows.length);
     let next = 0;
     const workerCount = Math.max(1, Math.min(concurrency, rows.length));
+    let loaded = 0;
 
     const workers = Array.from({ length: workerCount }, async () => {
       while (true) {
@@ -1359,6 +1366,8 @@ export default function CrawlPage() {
         if (idx >= rows.length) break;
         const r = rows[idx];
         out[idx] = await ensureCompareRowDetails(r.url_hash);
+        loaded += 1;
+        onProgress?.(loaded, rows.length);
       }
     });
 
@@ -2063,7 +2072,20 @@ export default function CrawlPage() {
     }
     try {
       const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
-      const detailsList = await fetchCompareRowDetailsConcurrently(filteredCompareRows, 6);
+      setCompareExportDetailsProgress({
+        label: "Preparing full CSV",
+        loaded: 0,
+        total: filteredCompareRows.length,
+      });
+      const detailsList = await fetchCompareRowDetailsConcurrently(
+        filteredCompareRows,
+        6,
+        (loaded) =>
+          setCompareExportDetailsProgress((p) => {
+            if (!p) return p;
+            return { ...p, loaded };
+          }),
+      );
       for (let i = 0; i < filteredCompareRows.length; i += 1) {
         const details = detailsList[i];
         lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(details[h])).join(","));
@@ -2080,6 +2102,8 @@ export default function CrawlPage() {
       URL.revokeObjectURL(objectUrl);
     } catch (e) {
       setError(describeFetchFailure(e, "Download filtered compare full CSV"));
+    } finally {
+      setCompareExportDetailsProgress(null);
     }
   }
 
@@ -2095,7 +2119,20 @@ export default function CrawlPage() {
     }
     try {
       const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
-      const detailsList = await fetchCompareRowDetailsConcurrently(visibleSortedCompareRows, 6);
+      setCompareExportDetailsProgress({
+        label: "Preparing page CSV",
+        loaded: 0,
+        total: visibleSortedCompareRows.length,
+      });
+      const detailsList = await fetchCompareRowDetailsConcurrently(
+        visibleSortedCompareRows,
+        6,
+        (loaded) =>
+          setCompareExportDetailsProgress((p) => {
+            if (!p) return p;
+            return { ...p, loaded };
+          }),
+      );
       for (let i = 0; i < visibleSortedCompareRows.length; i += 1) {
         const details = detailsList[i];
         lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(details[h])).join(","));
@@ -2112,6 +2149,8 @@ export default function CrawlPage() {
       URL.revokeObjectURL(objectUrl);
     } catch (e) {
       setError(describeFetchFailure(e, "Download visible compare page CSV"));
+    } finally {
+      setCompareExportDetailsProgress(null);
     }
   }
 
@@ -3167,6 +3206,17 @@ export default function CrawlPage() {
                   aria-atomic="true"
                 >
                   {compareUrlListCopyNotice}
+                </div>
+              ) : null}
+              {compareExportDetailsProgress ? (
+                <div
+                  className="border-b border-zinc-100 px-3 py-1.5 text-[11px] text-zinc-600"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  {compareExportDetailsProgress.label}: {compareExportDetailsProgress.loaded} /{" "}
+                  {compareExportDetailsProgress.total} details loaded…
                 </div>
               ) : null}
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-600">
