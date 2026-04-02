@@ -222,6 +222,11 @@ function compareStatusPairThAriaSort(
   return activeDir === "asc" ? "ascending" : "descending";
 }
 
+/** Stable DOM id for the expanded A/B detail panel (unique per table page + row index). */
+function compareRowDetailRegionId(tablePage: number, rowIndex: number): string {
+  return `compare-row-detail-p${tablePage}-r${rowIndex}`;
+}
+
 type CrawlUrlsResponse = {
   items: Array<{
     id: string;
@@ -2627,7 +2632,14 @@ export default function CrawlPage() {
                 )}
               </div>
               {compareUrlListCopyNotice ? (
-                <div className="border-b border-zinc-100 px-3 py-1.5 text-[11px] text-emerald-700">{compareUrlListCopyNotice}</div>
+                <div
+                  className="border-b border-zinc-100 px-3 py-1.5 text-[11px] text-emerald-700"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  {compareUrlListCopyNotice}
+                </div>
               ) : null}
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-600">
                 {compareDiffPreview.totalDiffRows != null ? (
@@ -2830,6 +2842,7 @@ export default function CrawlPage() {
                       {visibleSortedCompareRows.map((r, i) => {
                         const rowKey = `${r.change_kind}\t${r.url}`;
                         const open = expandedCompareRowKeys.has(rowKey);
+                        const detailRegionId = compareRowDetailRegionId(compareTablePage, i);
                         const deltaStr = compareRowStatusDeltaLabel(r);
                         const statusChangedHighlight = deltaStr !== "" && deltaStr !== "0";
                         const rowAriaLabel = statusChangedHighlight
@@ -2841,6 +2854,7 @@ export default function CrawlPage() {
                               role="button"
                               tabIndex={0}
                               aria-expanded={open}
+                              aria-controls={open ? detailRegionId : undefined}
                               aria-label={rowAriaLabel}
                               className={`cursor-pointer hover:bg-zinc-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60 focus-visible:ring-offset-1 ${
                                 statusChangedHighlight ? "bg-amber-50/60" : ""
@@ -2864,6 +2878,7 @@ export default function CrawlPage() {
                                     href={r.url}
                                     target="_blank"
                                     rel="noreferrer"
+                                    aria-label={`Open ${r.url} in a new tab`}
                                     onClick={(e) => e.stopPropagation()}
                                     className="rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] text-zinc-700 hover:bg-zinc-50"
                                   >
@@ -2871,6 +2886,7 @@ export default function CrawlPage() {
                                   </a>
                                   <button
                                     type="button"
+                                    aria-label={copiedCompareRowUrl === r.url ? "URL copied" : `Copy URL ${r.url}`}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       void copyCompareRowUrl(r.url);
@@ -2914,7 +2930,12 @@ export default function CrawlPage() {
                             {open ? (
                               <tr className="bg-zinc-50/80">
                                 <td colSpan={5} className="px-3 py-3">
-                                  <div className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]">
+                                  <div
+                                    id={detailRegionId}
+                                    role="region"
+                                    aria-label={`Baseline A and crawl B field values for ${r.url}`}
+                                    className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]"
+                                  >
                                     <div className="border-b border-zinc-200 pb-1 font-semibold text-zinc-600">Field</div>
                                     <div className="border-b border-zinc-200 pb-1 font-mono font-semibold text-zinc-600">
                                       A (baseline)
@@ -2957,7 +2978,7 @@ export default function CrawlPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
-                <div>
+                <div aria-live="polite" aria-atomic="true">
                   Page {compareTablePage} of {compareTableTotalPages}. Showing {visibleSortedCompareRows.length} of{" "}
                   {sortedFilteredCompareRows.length} filtered row(s).
                 </div>
