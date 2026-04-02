@@ -129,39 +129,46 @@ export async function GET(req: Request) {
     };
 
     function changedFieldsTokenList(ra: AuditRow, rb: AuditRow): string {
+      let out = "";
+      const push = (token: string) => {
+        out = out === "" ? token : `${out}|${token}`;
+      };
+
       const statusDiff = ra.httpStatus !== rb.httpStatus;
       const titleDiff = ra.title === rb.title ? false : normStr(ra.title) !== normStr(rb.title);
-      const canDiff = ra.canonicalUrl === rb.canonicalUrl ? false : normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
+      const canDiff =
+        ra.canonicalUrl === rb.canonicalUrl ? false : normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
       const metaDiff = ra.metaDesc === rb.metaDesc ? false : normStr(ra.metaDesc) !== normStr(rb.metaDesc);
       const wordDiff = ra.wordCount !== rb.wordCount;
       const h1TextDiff = ra.h1Text === rb.h1Text ? false : normStr(ra.h1Text) !== normStr(rb.h1Text);
       const h1CountDiff = ra.h1Count !== rb.h1Count;
-      const contentTypeDiff = ra.contentType === rb.contentType ? false : normStr(ra.contentType) !== normStr(rb.contentType);
+      const contentTypeDiff =
+        ra.contentType === rb.contentType ? false : normStr(ra.contentType) !== normStr(rb.contentType);
       const robotsDiff = ra.robotsMeta === rb.robotsMeta ? false : normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
       const metaRefreshDiff =
         ra.metaRefreshContent === rb.metaRefreshContent ? false : normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
-      const contentHashDiff = ra.contentHash === rb.contentHash ? false : normStr(ra.contentHash) !== normStr(rb.contentHash);
+      const contentHashDiff =
+        ra.contentHash === rb.contentHash ? false : normStr(ra.contentHash) !== normStr(rb.contentHash);
       const xRobotsDiff = ra.xRobotsTag === rb.xRobotsTag ? false : normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
       const htmlLangDiff = ra.htmlLang === rb.htmlLang ? false : normStr(ra.htmlLang) !== normStr(rb.htmlLang);
       const responseTimeDiff = ra.responseTimeMs !== rb.responseTimeMs;
 
-      const fields: string[] = [];
-      if (statusDiff) fields.push("status");
-      if (titleDiff) fields.push("title");
-      if (canDiff) fields.push("canonical");
-      if (metaDiff) fields.push("meta_description");
-      if (wordDiff) fields.push("word_count");
-      if (h1TextDiff) fields.push("h1_text");
-      if (h1CountDiff) fields.push("h1_count");
-      if (contentTypeDiff) fields.push("content_type");
-      if (robotsDiff) fields.push("robots_meta");
-      if (metaRefreshDiff) fields.push("meta_refresh");
-      if (contentHashDiff) fields.push("content_hash");
-      if (xRobotsDiff) fields.push("x_robots_tag");
-      if (htmlLangDiff) fields.push("html_lang");
-      if (responseTimeDiff) fields.push("response_time_ms");
+      if (statusDiff) push("status");
+      if (titleDiff) push("title");
+      if (canDiff) push("canonical");
+      if (metaDiff) push("meta_description");
+      if (wordDiff) push("word_count");
+      if (h1TextDiff) push("h1_text");
+      if (h1CountDiff) push("h1_count");
+      if (contentTypeDiff) push("content_type");
+      if (robotsDiff) push("robots_meta");
+      if (metaRefreshDiff) push("meta_refresh");
+      if (contentHashDiff) push("content_hash");
+      if (xRobotsDiff) push("x_robots_tag");
+      if (htmlLangDiff) push("html_lang");
+      if (responseTimeDiff) push("response_time_ms");
 
-      return fields.join("|");
+      return out;
     }
 
     function rowHasAnyDiff(ra: AuditRow, rb: AuditRow): boolean {
