@@ -114,6 +114,175 @@ export async function GET(req: Request) {
   const mapA = auditsToMap(auditsA as AuditRow[]);
   const mapB = auditsToMap(auditsB as AuditRow[]);
 
+  // Performance: for paginated preview (Phase 2), build only lightweight rows.
+  // Expanded details are fetched lazily per `url_hash`.
+  if (format === "json" && jsonPaginated) {
+    type PreviewRow = {
+      url_hash: string;
+      change_kind: "new_in_b" | "removed_in_a" | "changed";
+      changed_fields: string;
+      url: string;
+      http_status_a: number | string;
+      http_status_b: number | string;
+      title_a: string;
+      title_b: string;
+    };
+
+    const previewRows: PreviewRow[] = [];
+
+    for (const [h, rb] of mapB) {
+      if (!mapA.has(h)) {
+        previewRows.push({
+          change_kind: "new_in_b",
+          changed_fields: "",
+          url_hash: h,
+          url: rb.url,
+          http_status_a: "",
+          http_status_b: rb.httpStatus ?? "",
+          title_a: "",
+          title_b: normStr(rb.title),
+        });
+      }
+    }
+
+    for (const [h, ra] of mapA) {
+      if (!mapB.has(h)) {
+        previewRows.push({
+          change_kind: "removed_in_a",
+          changed_fields: "",
+          url_hash: h,
+          url: ra.url,
+          http_status_a: ra.httpStatus ?? "",
+          http_status_b: "",
+          title_a: normStr(ra.title),
+          title_b: "",
+        });
+      }
+    }
+
+    for (const [h, ra] of mapA) {
+      const rb = mapB.get(h);
+      if (!rb) continue;
+
+      const statusDiff = ra.httpStatus !== rb.httpStatus;
+      const titleDiff = normStr(ra.title) !== normStr(rb.title);
+      const canDiff = normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
+      const metaDiff = normStr(ra.metaDesc) !== normStr(rb.metaDesc);
+      const wordDiff = ra.wordCount !== rb.wordCount;
+      const h1TextDiff = normStr(ra.h1Text) !== normStr(rb.h1Text);
+      const h1CountDiff = ra.h1Count !== rb.h1Count;
+      const contentTypeDiff = normStr(ra.contentType) !== normStr(rb.contentType);
+      const robotsDiff = normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
+      const metaRefreshDiff = normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
+      const contentHashDiff = normStr(ra.contentHash) !== normStr(rb.contentHash);
+      const xRobotsDiff = normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
+      const htmlLangDiff = normStr(ra.htmlLang) !== normStr(rb.htmlLang);
+      const responseTimeDiff = ra.responseTimeMs !== rb.responseTimeMs;
+      if (
+        !statusDiff &&
+        !titleDiff &&
+        !canDiff &&
+        !metaDiff &&
+        !wordDiff &&
+        !h1TextDiff &&
+        !h1CountDiff &&
+        !contentTypeDiff &&
+        !robotsDiff &&
+        !metaRefreshDiff &&
+        !contentHashDiff &&
+        !xRobotsDiff &&
+        !htmlLangDiff &&
+        !responseTimeDiff
+      )
+        continue;
+
+      const fields: string[] = [];
+      if (statusDiff) fields.push("status");
+      if (titleDiff) fields.push("title");
+      if (canDiff) fields.push("canonical");
+      if (metaDiff) fields.push("meta_description");
+      if (wordDiff) fields.push("word_count");
+      if (h1TextDiff) fields.push("h1_text");
+      if (h1CountDiff) fields.push("h1_count");
+      if (contentTypeDiff) fields.push("content_type");
+      if (robotsDiff) fields.push("robots_meta");
+      if (metaRefreshDiff) fields.push("meta_refresh");
+      if (contentHashDiff) fields.push("content_hash");
+      if (xRobotsDiff) fields.push("x_robots_tag");
+      if (htmlLangDiff) fields.push("html_lang");
+      if (responseTimeDiff) fields.push("response_time_ms");
+
+      previewRows.push({
+        change_kind: "changed",
+        changed_fields: fields.join("|"),
+        url_hash: h,
+        url: ra.url,
+        http_status_a: ra.httpStatus ?? "",
+        http_status_b: rb.httpStatus ?? "",
+        title_a: normStr(ra.title),
+        title_b: normStr(rb.title),
+      });
+    }
+
+    previewRows.sort((x, y) => {
+      const o = String(x.change_kind).localeCompare(String(y.change_kind));
+      if (o !== 0) return o;
+      return String(x.url).localeCompare(String(y.url));
+    });
+
+    let newInB = 0;
+    let removedInA = 0;
+    let changed = 0;
+    for (const r of previewRows) {
+      const k = r.change_kind;
+      if (k === "new_in_b") newInB += 1;
+      else if (k === "removed_in_a") removedInA += 1;
+      else if (k === "changed") changed += 1;
+    }
+    const counts = {
+      new_in_b: newInB,
+      removed_in_a: removedInA,
+      changed,
+      pages_in_a: auditsA.length,
+      pages_in_b: auditsB.length,
+    };
+    const totalDiffRows = previewRows.length;
+
+    const rawCursor = searchParams.get("cursor");
+    let offset = 0;
+    if (rawCursor) {
+      const parsedOffset = parseCompareJsonCursor(rawCursor);
+      if (parsedOffset === null) {
+        return NextResponse.json(
+          { error: "invalid_cursor", message: "Invalid cursor for compare pagination." },
+          { status: 400 },
+        );
+      }
+      offset = parsedOffset;
+    }
+    if (offset > totalDiffRows) {
+      return NextResponse.json(
+        { error: "cursor_out_of_range", message: "Cursor offset is beyond this compare result set." },
+        { status: 400 },
+      );
+    }
+
+    const pageRows = previewRows.slice(offset, offset + pageLimit);
+    const nextOffset = offset + pageRows.length;
+    const next_cursor = nextOffset < totalDiffRows ? encodeCompareJsonCursor(nextOffset) : null;
+
+    return NextResponse.json({
+      job_a: jobA,
+      job_b: jobB,
+      counts,
+      total_diff_rows: totalDiffRows,
+      limit: pageLimit,
+      offset,
+      rows: pageRows,
+      next_cursor,
+    });
+  }
+
   type OutRow = Record<string, string | number | null>;
   const rows: OutRow[] = [];
 
