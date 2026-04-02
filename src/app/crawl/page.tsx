@@ -680,6 +680,8 @@ export default function CrawlPage() {
   const [compareLoadMoreError, setCompareLoadMoreError] = useState<string | null>(null);
   /** Initial compare preview fetch failed (HTTP error, bad JSON shape, or network). */
   const [comparePreviewError, setComparePreviewError] = useState<string | null>(null);
+  /** Bump to re-run the debounced compare preview fetch without changing job ids (Retry button). */
+  const [comparePreviewRetryNonce, setComparePreviewRetryNonce] = useState(0);
   const [compareAutoLoadAll, setCompareAutoLoadAll] = useState(false);
   const [compareExportAfterAutoLoad, setCompareExportAfterAutoLoad] = useState(false);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
@@ -1076,7 +1078,7 @@ export default function CrawlPage() {
       comparePreviewAbortRef.current?.abort();
       comparePreviewAbortRef.current = null;
     };
-  }, [compareDiffApiPageLimit, compareJobA, compareJobB]);
+  }, [compareDiffApiPageLimit, compareJobA, compareJobB, comparePreviewRetryNonce]);
 
   useEffect(() => {
     setExpandedCompareRowKeys(new Set());
@@ -2359,11 +2361,19 @@ export default function CrawlPage() {
           compareJobA !== compareJobB &&
           !compareDiffPreview?.loading ? (
             <div
-              className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+              className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
               role="alert"
               aria-live="assertive"
             >
-              {comparePreviewError}
+              <span className="min-w-0 flex-1">{comparePreviewError}</span>
+              <button
+                type="button"
+                className="shrink-0 rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-100"
+                aria-label="Retry loading compare preview"
+                onClick={() => setComparePreviewRetryNonce((n) => n + 1)}
+              >
+                Retry
+              </button>
             </div>
           ) : null}
           {compareDiffPreview && (compareDiffPreview.loading || compareDiffPreview.counts) ? (
