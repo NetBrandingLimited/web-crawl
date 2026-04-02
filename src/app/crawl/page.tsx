@@ -6,6 +6,8 @@ const WORKER_STEPS_CAP = 4000;
 const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
 /** Debounce compare table text search so large loaded diffs are not re-sorted on every keystroke. */
 const COMPARE_TABLE_TEXT_FILTER_DEBOUNCE_MS = 240;
+/** Page Up/Down moves this many rows while navigating the visible compare table page. */
+const COMPARE_TABLE_PAGE_KEY_ROW_STEP = 12;
 /** Default page size for Phase 2 compare JSON (`paginate=1` on compare API). */
 const DEFAULT_COMPARE_DIFF_PAGE_LIMIT = 500;
 /** Max URLs in one clipboard list copy (filtered); avoids huge payloads / browser limits. */
@@ -1170,18 +1172,51 @@ export default function CrawlPage() {
     return { changed, newInB, removedInA };
   }, [filteredCompareRows]);
 
-  const focusAdjacentCompareVisibleRow = useCallback(
-    (fromIndex: number, direction: "up" | "down") => {
-      const delta = direction === "down" ? 1 : -1;
-      const nextIdx = fromIndex + delta;
-      if (nextIdx < 0 || nextIdx >= visibleSortedCompareRows.length) return;
-      const next = visibleSortedCompareRows[nextIdx];
-      const nextKey = `${next.change_kind}\t${next.url}`;
-      queueMicrotask(() => {
-        compareMainRowTrRefs.current.get(nextKey)?.focus({ preventScroll: true });
-      });
+  const focusCompareVisibleRowAtIndex = useCallback((idx: number) => {
+    const rows = visibleSortedCompareRows;
+    if (idx < 0 || idx >= rows.length) return;
+    const row = rows[idx];
+    const key = `${row.change_kind}\t${row.url}`;
+    queueMicrotask(() => {
+      compareMainRowTrRefs.current.get(key)?.focus({ preventScroll: true });
+    });
+  }, [visibleSortedCompareRows]);
+
+  /** Home/End/Page/Arrow navigation within the current on-screen table page. Returns true if the key was handled. */
+  const applyCompareTableRowNavKeys = useCallback(
+    (e: { key: string; preventDefault: () => void }, rowIndex: number): boolean => {
+      const len = visibleSortedCompareRows.length;
+      if (len === 0) return false;
+
+      if (e.key === "Home") {
+        e.preventDefault();
+        focusCompareVisibleRowAtIndex(0);
+        return true;
+      }
+      if (e.key === "End") {
+        e.preventDefault();
+        focusCompareVisibleRowAtIndex(len - 1);
+        return true;
+      }
+      if (e.key === "PageDown") {
+        e.preventDefault();
+        focusCompareVisibleRowAtIndex(Math.min(len - 1, rowIndex + COMPARE_TABLE_PAGE_KEY_ROW_STEP));
+        return true;
+      }
+      if (e.key === "PageUp") {
+        e.preventDefault();
+        focusCompareVisibleRowAtIndex(Math.max(0, rowIndex - COMPARE_TABLE_PAGE_KEY_ROW_STEP));
+        return true;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const next = rowIndex + (e.key === "ArrowDown" ? 1 : -1);
+        if (next >= 0 && next < len) focusCompareVisibleRowAtIndex(next);
+        return true;
+      }
+      return false;
     },
-    [visibleSortedCompareRows],
+    [visibleSortedCompareRows, focusCompareVisibleRowAtIndex],
   );
 
   const loadMoreCompareDiffs = useCallback(() => {
@@ -2857,9 +2892,8 @@ export default function CrawlPage() {
                     id="compare-diff-table-hint"
                     className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500"
                   >
-                    Click a row to expand full A vs B field values. Row: Enter or Space toggles; Arrow Up or Down moves between rows on this
-                    page; Escape collapses. Tab into the expanded A/B grid; Escape there collapses and returns focus to the row; Arrow keys
-                    move between rows from the grid too.
+                    Click a row to expand full A vs B field values. Row: Enter or Space toggles; Escape collapses. On this table page,
+                    Arrow keys, Home, End, Page Up, and Page Down move between rows (from the row or the expanded A/B grid after Tab).
                     Differing values are emphasized. Amber-tinted rows have a different{" "}
                     <span className="font-medium">numeric HTTP status</span> in A vs B (other changes alone do not get this tint).
                   </p>
@@ -2975,7 +3009,7 @@ export default function CrawlPage() {
                           open
                             ? "Details expanded. Press Enter, Space, or Escape to collapse."
                             : "Press Enter or Space to expand details.",
-                          "Arrow Up or Down moves between rows on this page.",
+                          "Arrow keys, Home, End, Page Up, and Page Down move between rows on this page.",
                         ].join(" ");
                         return (
                           <Fragment key={`${r.change_kind}:${r.url}:${i}`}>
@@ -3005,10 +3039,7 @@ export default function CrawlPage() {
                                   toggleCompareRowExpanded(rowKey);
                                   return;
                                 }
-                                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                                  e.preventDefault();
-                                  focusAdjacentCompareVisibleRow(i, e.key === "ArrowDown" ? "down" : "up");
-                                }
+                                applyCompareTableRowNavKeys(e, i);
                               }}
                             >
                               <td className="px-3 py-2 font-mono">
@@ -3077,10 +3108,8 @@ export default function CrawlPage() {
                                     aria-label={`Baseline A and crawl B field values for ${r.url}`}
                                     className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/45 focus-visible:ring-offset-1 md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]"
                                     onKeyDownCapture={(e) => {
-                                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                                        e.preventDefault();
+                                      if (applyCompareTableRowNavKeys(e, i)) {
                                         e.stopPropagation();
-                                        focusAdjacentCompareVisibleRow(i, e.key === "ArrowDown" ? "down" : "up");
                                         return;
                                       }
                                       if (e.key !== "Escape") return;
