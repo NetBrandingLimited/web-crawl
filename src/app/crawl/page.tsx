@@ -1170,6 +1170,20 @@ export default function CrawlPage() {
     return { changed, newInB, removedInA };
   }, [filteredCompareRows]);
 
+  const focusAdjacentCompareVisibleRow = useCallback(
+    (fromIndex: number, direction: "up" | "down") => {
+      const delta = direction === "down" ? 1 : -1;
+      const nextIdx = fromIndex + delta;
+      if (nextIdx < 0 || nextIdx >= visibleSortedCompareRows.length) return;
+      const next = visibleSortedCompareRows[nextIdx];
+      const nextKey = `${next.change_kind}\t${next.url}`;
+      queueMicrotask(() => {
+        compareMainRowTrRefs.current.get(nextKey)?.focus({ preventScroll: true });
+      });
+    },
+    [visibleSortedCompareRows],
+  );
+
   const loadMoreCompareDiffs = useCallback(() => {
     if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
     setCompareLoadMoreError(null);
@@ -2843,8 +2857,9 @@ export default function CrawlPage() {
                     id="compare-diff-table-hint"
                     className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500"
                   >
-                    Click a row to expand full A vs B field values. Row: Enter or Space toggles, Escape collapses. Tab into the expanded
-                    A/B grid to review values; Escape there collapses and moves focus back to the row.
+                    Click a row to expand full A vs B field values. Row: Enter or Space toggles; Arrow Up or Down moves between rows on this
+                    page; Escape collapses. Tab into the expanded A/B grid; Escape there collapses and returns focus to the row; Arrow keys
+                    move between rows from the grid too.
                     Differing values are emphasized. Amber-tinted rows have a different{" "}
                     <span className="font-medium">numeric HTTP status</span> in A vs B (other changes alone do not get this tint).
                   </p>
@@ -2960,6 +2975,7 @@ export default function CrawlPage() {
                           open
                             ? "Details expanded. Press Enter, Space, or Escape to collapse."
                             : "Press Enter or Space to expand details.",
+                          "Arrow Up or Down moves between rows on this page.",
                         ].join(" ");
                         return (
                           <Fragment key={`${r.change_kind}:${r.url}:${i}`}>
@@ -2987,6 +3003,11 @@ export default function CrawlPage() {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   toggleCompareRowExpanded(rowKey);
+                                  return;
+                                }
+                                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                                  e.preventDefault();
+                                  focusAdjacentCompareVisibleRow(i, e.key === "ArrowDown" ? "down" : "up");
                                 }
                               }}
                             >
@@ -3056,6 +3077,12 @@ export default function CrawlPage() {
                                     aria-label={`Baseline A and crawl B field values for ${r.url}`}
                                     className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/45 focus-visible:ring-offset-1 md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]"
                                     onKeyDownCapture={(e) => {
+                                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        focusAdjacentCompareVisibleRow(i, e.key === "ArrowDown" ? "down" : "up");
+                                        return;
+                                      }
                                       if (e.key !== "Escape") return;
                                       e.preventDefault();
                                       e.stopPropagation();
