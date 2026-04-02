@@ -2127,7 +2127,9 @@ export default function CrawlPage() {
             </div>
           ) : null}
           {compareUrlHydrationNotice ? (
-            <div className="mt-2 text-xs text-amber-700">{compareUrlHydrationNotice}</div>
+            <div className="mt-2 text-xs text-amber-700" role="status" aria-live="polite">
+              {compareUrlHydrationNotice}
+            </div>
           ) : null}
           {jobsListError ? <div className="mt-2 text-sm text-red-600">{jobsListError}</div> : null}
           {!jobsListError && !jobsListLoading && jobsList.length === 0 ? (
@@ -2294,6 +2296,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label={`Remove change-kind filter (${compareTableFilterKind})`}
                       onClick={() => setCompareTableFilterKind("all")}
                     >
                       kind={compareTableFilterKind} ×
@@ -2303,6 +2306,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label={`Remove changed-field filter (${compareFieldFilter})`}
                       onClick={() => setCompareFieldFilter("all")}
                     >
                       field={compareFieldFilter} ×
@@ -2312,6 +2316,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label="Clear diff row text search"
                       onClick={() => setCompareTableFilterText("")}
                     >
                       q={compareTableFilterText.trim()} ×
@@ -2321,6 +2326,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label="Remove status-changes-only filter"
                       onClick={() => setCompareOnlyStatusChanges(false)}
                     >
                       status-only ×
@@ -2330,6 +2336,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label={`Remove preset (${comparePreset})`}
                       onClick={() => setComparePreset("all")}
                     >
                       preset={comparePreset} ×
@@ -2339,6 +2346,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label="Stop including new and removed URLs in preset view"
                       onClick={() => setComparePresetIncludeNewRemoved(false)}
                     >
                       include N/R ×
@@ -2348,6 +2356,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label="Reset sort to change kind, ascending"
                       onClick={() => {
                         setCompareSortKey("kind");
                         setCompareSortDir("asc");
@@ -2360,6 +2369,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label="Reset table rows per page to 200"
                       onClick={() => setCompareTablePageSize(200)}
                     >
                       page size={compareTablePageSize} ×
@@ -2369,6 +2379,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label="Go to first page of filtered results"
                       onClick={() => setCompareTablePage(1)}
                     >
                       page={compareTablePage} ×
@@ -2378,6 +2389,7 @@ export default function CrawlPage() {
                     <button
                       type="button"
                       className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 hover:bg-zinc-100"
+                      aria-label="Show only changed fields when a row is expanded"
                       onClick={() => setCompareExpandOnlyChangedFields(true)}
                     >
                       expanded=all fields ×
@@ -2388,6 +2400,7 @@ export default function CrawlPage() {
               <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3 py-2">
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  aria-label="Filter diff rows by change kind"
                   value={compareTableFilterKind}
                   onChange={(e) => {
                     setComparePreset("all");
@@ -2402,6 +2415,7 @@ export default function CrawlPage() {
                 </select>
                 <input
                   className="min-w-[14rem] flex-1 rounded-md border border-zinc-200 px-2 py-1 text-xs"
+                  aria-label="Search loaded diff rows"
                   value={compareTableFilterText}
                   onChange={(e) => {
                     setComparePreset("all");
@@ -2413,6 +2427,7 @@ export default function CrawlPage() {
                 />
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  aria-label="Filter changed rows by a single field in changed_fields"
                   value={compareFieldFilter}
                   onChange={(e) => {
                     setComparePreset("all");
@@ -2457,6 +2472,8 @@ export default function CrawlPage() {
                       ? "border-zinc-900 bg-zinc-900 text-white"
                       : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
                   }`}
+                  aria-pressed={compareTableFilterKind === "changed"}
+                  aria-label={`Filter to changed rows, ${filteredCompareKindCounts.changed} in loaded diff`}
                   onClick={() => toggleCompareKindQuickFilter("changed")}
                 >
                   changed: {filteredCompareKindCounts.changed}
@@ -2468,6 +2485,8 @@ export default function CrawlPage() {
                       ? "border-zinc-900 bg-zinc-900 text-white"
                       : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
                   }`}
+                  aria-pressed={compareTableFilterKind === "new_in_b"}
+                  aria-label={`Filter to new in B, ${filteredCompareKindCounts.newInB} in loaded diff`}
                   onClick={() => toggleCompareKindQuickFilter("new_in_b")}
                 >
                   new_in_b: {filteredCompareKindCounts.newInB}
@@ -2479,6 +2498,8 @@ export default function CrawlPage() {
                       ? "border-zinc-900 bg-zinc-900 text-white"
                       : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
                   }`}
+                  aria-pressed={compareTableFilterKind === "removed_in_a"}
+                  aria-label={`Filter to removed since A, ${filteredCompareKindCounts.removedInA} in loaded diff`}
                   onClick={() => toggleCompareKindQuickFilter("removed_in_a")}
                 >
                   removed_in_a: {filteredCompareKindCounts.removedInA}
@@ -2524,6 +2545,7 @@ export default function CrawlPage() {
                 </button>
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  aria-label="Compare API page size when loading diff rows"
                   value={compareDiffApiPageLimit}
                   onChange={(e) => setCompareDiffApiPageLimit(Number(e.target.value) as 200 | 500 | 1000)}
                 >
@@ -2533,6 +2555,7 @@ export default function CrawlPage() {
                 </select>
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  aria-label="Compare table rows per page"
                   value={compareTablePageSize}
                   onChange={(e) => setCompareTablePageSize(Number(e.target.value) as 100 | 200 | 500)}
                 >
@@ -2551,6 +2574,7 @@ export default function CrawlPage() {
                 </label>
                 <select
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                  aria-label="Sort compare diff rows by"
                   value={compareSortKey}
                   onChange={(e) => setCompareSortKey(e.target.value as CompareSortKey)}
                 >
@@ -2564,6 +2588,11 @@ export default function CrawlPage() {
                 <button
                   type="button"
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"
+                  aria-label={
+                    compareSortDir === "asc"
+                      ? "Sort direction is ascending; switch to descending"
+                      : "Sort direction is descending; switch to ascending"
+                  }
                   onClick={() => setCompareSortDir((d) => (d === "asc" ? "desc" : "asc"))}
                 >
                   {compareSortDir === "asc" ? "Asc" : "Desc"}
@@ -2765,6 +2794,7 @@ export default function CrawlPage() {
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 hover:text-zinc-700"
+                            aria-label="Sort by change kind"
                             onClick={() => setCompareSortFromHeader("kind")}
                           >
                             Kind {compareSortKey === "kind" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
@@ -2778,6 +2808,7 @@ export default function CrawlPage() {
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 hover:text-zinc-700"
+                            aria-label="Sort by URL"
                             onClick={() => setCompareSortFromHeader("url")}
                           >
                             URL {compareSortKey === "url" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
@@ -2791,6 +2822,7 @@ export default function CrawlPage() {
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 hover:text-zinc-700"
+                            aria-label="Sort by changed fields column"
                             onClick={() => setCompareSortFromHeader("fields")}
                           >
                             Changed fields {compareSortKey === "fields" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
@@ -2805,6 +2837,7 @@ export default function CrawlPage() {
                             <button
                               type="button"
                               className="inline-flex items-center gap-1 hover:text-zinc-700"
+                              aria-label="Sort by HTTP status in baseline crawl A"
                               onClick={() => setCompareSortFromHeader("status_a")}
                             >
                               Status A {compareSortKey === "status_a" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
@@ -2813,6 +2846,7 @@ export default function CrawlPage() {
                             <button
                               type="button"
                               className="inline-flex items-center gap-1 hover:text-zinc-700"
+                              aria-label="Sort by HTTP status in compare crawl B"
                               onClick={() => setCompareSortFromHeader("status_b")}
                             >
                               B {compareSortKey === "status_b" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
@@ -2827,6 +2861,7 @@ export default function CrawlPage() {
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 hover:text-zinc-700"
+                            aria-label="Sort by HTTP status delta (B minus A)"
                             onClick={() => setCompareSortFromHeader("status_delta")}
                           >
                             Status{" "}
@@ -2986,6 +3021,7 @@ export default function CrawlPage() {
                   <button
                     type="button"
                     className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    aria-label="Compare table first page"
                     onClick={() => setCompareTablePage(1)}
                     disabled={compareTablePage <= 1}
                   >
@@ -2995,6 +3031,7 @@ export default function CrawlPage() {
                     <span className="text-zinc-500">Go to</span>
                     <input
                       className="w-14 rounded border border-zinc-200 px-1.5 py-1 text-xs text-zinc-700"
+                      aria-label="Compare table page number"
                       inputMode="numeric"
                       pattern="[0-9]*"
                       value={comparePageJumpInput}
@@ -3008,6 +3045,7 @@ export default function CrawlPage() {
                   <button
                     type="button"
                     className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    aria-label="Go to entered page"
                     onClick={() => goToComparePageFromInput()}
                     disabled={sortedFilteredCompareRows.length === 0}
                   >
@@ -3016,6 +3054,7 @@ export default function CrawlPage() {
                   <button
                     type="button"
                     className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    aria-label="Compare table previous page"
                     onClick={() => setCompareTablePage((p) => Math.max(1, p - 1))}
                     disabled={compareTablePage <= 1}
                   >
@@ -3024,6 +3063,7 @@ export default function CrawlPage() {
                   <button
                     type="button"
                     className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    aria-label="Compare table next page"
                     onClick={() => setCompareTablePage((p) => Math.min(compareTableTotalPages, p + 1))}
                     disabled={compareTablePage >= compareTableTotalPages}
                   >
@@ -3032,6 +3072,7 @@ export default function CrawlPage() {
                   <button
                     type="button"
                     className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    aria-label="Compare table last page"
                     onClick={() => setCompareTablePage(compareTableTotalPages)}
                     disabled={compareTablePage >= compareTableTotalPages}
                   >
