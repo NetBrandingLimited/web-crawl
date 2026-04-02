@@ -2380,11 +2380,15 @@ export default function CrawlPage() {
     rowKey,
     rowIndexOnPage,
     detailRegionId,
+    prefetchPrevUrlHash,
+    prefetchNextUrlHash,
   }: {
     r: CompareDiffRow;
     rowKey: string;
     rowIndexOnPage: number;
     detailRegionId: string;
+    prefetchPrevUrlHash?: string;
+    prefetchNextUrlHash?: string;
   }) {
     const urlHash = r.url_hash;
     const details = compareRowDetailsCache[urlHash];
@@ -2400,12 +2404,10 @@ export default function CrawlPage() {
     // Performance: when a row is expanded, prefetch adjacent rows so Escape/arrow navigation feels instant.
     useEffect(() => {
       if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
-      const maybe = [rowIndexOnPage - 1, rowIndexOnPage + 1]
-        .map((idx) => visibleSortedCompareRows[idx])
-        .filter(Boolean) as CompareDiffRow[];
-      if (maybe.length === 0) return;
-      void Promise.allSettled(maybe.map((m) => ensureCompareRowDetails(m.url_hash)));
-    }, [rowIndexOnPage, visibleSortedCompareRows, compareJobA, compareJobB, ensureCompareRowDetails]);
+      const hashes = [prefetchPrevUrlHash, prefetchNextUrlHash].filter(Boolean) as string[];
+      if (hashes.length === 0) return;
+      void Promise.allSettled(hashes.map((h) => ensureCompareRowDetails(h)));
+    }, [prefetchPrevUrlHash, prefetchNextUrlHash, compareJobA, compareJobB, ensureCompareRowDetails]);
 
     return (
       <tr className="bg-zinc-50/80">
@@ -3539,6 +3541,8 @@ export default function CrawlPage() {
                                 rowKey={rowKey}
                                 rowIndexOnPage={i}
                                 detailRegionId={detailRegionId}
+                                prefetchPrevUrlHash={visibleSortedCompareRows[i - 1]?.url_hash}
+                                prefetchNextUrlHash={visibleSortedCompareRows[i + 1]?.url_hash}
                               />
                             ) : null}
                           </Fragment>
