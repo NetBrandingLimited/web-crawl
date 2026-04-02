@@ -493,49 +493,12 @@ export async function GET(req: Request) {
       });
     }
 
-    const rawCursor = searchParams.get("cursor");
-    let offset = 0;
-    if (rawCursor) {
-      const parsedOffset = parseCompareJsonCursor(rawCursor);
-      if (parsedOffset === null) {
-        return NextResponse.json(
-          { error: "invalid_cursor", message: "Invalid cursor for compare pagination." },
-          { status: 400 },
-        );
-      }
-      offset = parsedOffset;
-    }
-    if (offset > totalDiffRows) {
-      return NextResponse.json(
-        { error: "cursor_out_of_range", message: "Cursor offset is beyond this compare result set." },
-        { status: 400 },
-      );
-    }
-    const pageRows = rows.slice(offset, offset + pageLimit);
-    const nextOffset = offset + pageRows.length;
-    const next_cursor = nextOffset < totalDiffRows ? encodeCompareJsonCursor(nextOffset) : null;
-    // Lightweight payload for the Phase 2 preview: enough to render/sort/filter the table.
-    // Expanded A/B details are fetched lazily per row.
-    const previewRows = pageRows.map((r) => ({
-      url_hash: r.url_hash,
-      change_kind: r.change_kind,
-      changed_fields: r.changed_fields,
-      url: r.url,
-      http_status_a: r.http_status_a,
-      http_status_b: r.http_status_b,
-      title_a: r.title_a,
-      title_b: r.title_b,
-    }));
-    return NextResponse.json({
-      job_a: jobA,
-      job_b: jobB,
-      counts,
-      total_diff_rows: totalDiffRows,
-      limit: pageLimit,
-      offset,
-      rows: previewRows,
-      next_cursor,
-    });
+    // `jsonPaginated` is already handled by the early lightweight preview block above.
+    // This branch should never execute.
+    return NextResponse.json(
+      { error: "unexpected_json_paginated", message: "Internal error: compare pagination path skipped early return." },
+      { status: 500 },
+    );
   }
 
   const headers = [
