@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const WORKER_STEPS_CAP = 4000;
 const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
@@ -686,6 +686,9 @@ export default function CrawlPage() {
   const pendingCompareFromUrlRef = useRef<{ a: string; b: string } | null>(null);
   /** Main compare table row elements by rowKey; used to restore focus after collapsing the expanded panel. */
   const compareMainRowTrRefs = useRef(new Map<string, HTMLTableRowElement>());
+  /** After `[` / `]` change the result table page, focus first visible row (see useLayoutEffect). */
+  const compareBracketPageNavRef = useRef(false);
+  const visibleSortedCompareRowsRef = useRef<CompareDiffRow[]>([]);
   const [urlTableFilter, setUrlTableFilter] = useState("");
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
   const [jobsListLoading, setJobsListLoading] = useState(false);
@@ -1151,6 +1154,7 @@ export default function CrawlPage() {
     const start = (compareTablePage - 1) * compareTablePageSize;
     return sortedFilteredCompareRows.slice(start, start + compareTablePageSize);
   }, [compareTablePage, compareTablePageSize, sortedFilteredCompareRows]);
+  visibleSortedCompareRowsRef.current = visibleSortedCompareRows;
   const compareRemainingRows = useMemo(() => {
     const total = compareDiffPreview?.totalDiffRows ?? 0;
     const loaded = compareDiffPreview?.rows?.length ?? 0;
@@ -1218,6 +1222,34 @@ export default function CrawlPage() {
     },
     [visibleSortedCompareRows, focusCompareVisibleRowAtIndex],
   );
+
+  /** `[` / `]` step filtered-result pagination (not API load-more). Consumes key when no modifiers. */
+  const tryCompareTableBracketPageNav = useCallback(
+    (e: { key: string; preventDefault: () => void; ctrlKey: boolean; metaKey: boolean; altKey: boolean }): boolean => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return false;
+      if (e.key !== "[" && e.key !== "]") return false;
+      e.preventDefault();
+      if (e.key === "[" && compareTablePage > 1) {
+        compareBracketPageNavRef.current = true;
+        setCompareTablePage((p) => p - 1);
+      } else if (e.key === "]" && compareTablePage < compareTableTotalPages) {
+        compareBracketPageNavRef.current = true;
+        setCompareTablePage((p) => Math.min(compareTableTotalPages, p + 1));
+      }
+      return true;
+    },
+    [compareTablePage, compareTableTotalPages],
+  );
+
+  useLayoutEffect(() => {
+    if (!compareBracketPageNavRef.current) return;
+    compareBracketPageNavRef.current = false;
+    const rows = visibleSortedCompareRowsRef.current;
+    if (rows.length === 0) return;
+    const row = rows[0];
+    const key = `${row.change_kind}\t${row.url}`;
+    compareMainRowTrRefs.current.get(key)?.focus({ preventScroll: true });
+  }, [compareTablePage]);
 
   const loadMoreCompareDiffs = useCallback(() => {
     if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
@@ -2862,7 +2894,11 @@ export default function CrawlPage() {
                 </div>
               ) : null}
               {compareLoadMoreError ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2 text-xs text-red-600">
+                <div
+                  className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2 text-xs text-red-600"
+                  role="alert"
+                  aria-live="assertive"
+                >
                   <span>{compareLoadMoreError}</span>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -2893,7 +2929,8 @@ export default function CrawlPage() {
                     className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500"
                   >
                     Click a row to expand full A vs B field values. Row: Enter or Space toggles; Escape collapses. On this table page,
-                    Arrow keys, Home, End, Page Up, and Page Down move between rows (from the row or the expanded A/B grid after Tab).
+                    Arrow keys, Home, End, Page Up, and Page Down move between rows; [ and ] jump to the previous or next results page
+                    (when a row or expanded grid is focused). Tab into the expanded A/B grid to use the same keys there.
                     Differing values are emphasized. Amber-tinted rows have a different{" "}
                     <span className="font-medium">numeric HTTP status</span> in A vs B (other changes alone do not get this tint).
                   </p>
@@ -3009,7 +3046,7 @@ export default function CrawlPage() {
                           open
                             ? "Details expanded. Press Enter, Space, or Escape to collapse."
                             : "Press Enter or Space to expand details.",
-                          "Arrow keys, Home, End, Page Up, and Page Down move between rows on this page.",
+                          "Arrow keys, Home, End, Page Up, and Page Down move between rows on this page. [ and ] go to previous or next results page.",
                         ].join(" ");
                         return (
                           <Fragment key={`${r.change_kind}:${r.url}:${i}`}>
@@ -3028,6 +3065,7 @@ export default function CrawlPage() {
                               }`}
                               onClick={() => toggleCompareRowExpanded(rowKey)}
                               onKeyDown={(e) => {
+                                if (tryCompareTableBracketPageNav(e)) return;
                                 if (e.key === "Enter" || e.key === " ") {
                                   e.preventDefault();
                                   toggleCompareRowExpanded(rowKey);
@@ -3108,6 +3146,10 @@ export default function CrawlPage() {
                                     aria-label={`Baseline A and crawl B field values for ${r.url}`}
                                     className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/45 focus-visible:ring-offset-1 md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]"
                                     onKeyDownCapture={(e) => {
+                                      if (tryCompareTableBracketPageNav(e)) {
+                                        e.stopPropagation();
+                                        return;
+                                      }
                                       if (applyCompareTableRowNavKeys(e, i)) {
                                         e.stopPropagation();
                                         return;
