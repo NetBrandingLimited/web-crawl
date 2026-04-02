@@ -2835,7 +2835,8 @@ export default function CrawlPage() {
                     id="compare-diff-table-hint"
                     className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500"
                   >
-                    Click a row to expand full A vs B field values. Differing values are emphasized. Amber-tinted rows have a different{" "}
+                    Click a row to expand full A vs B field values; with the row focused, Enter or Space toggles and Escape collapses.
+                    Differing values are emphasized. Amber-tinted rows have a different{" "}
                     <span className="font-medium">numeric HTTP status</span> in A vs B (other changes alone do not get this tint).
                   </p>
                 )}
@@ -2943,9 +2944,14 @@ export default function CrawlPage() {
                         const detailRegionId = compareRowDetailRegionId(compareTablePage, i);
                         const deltaStr = compareRowStatusDeltaLabel(r);
                         const statusChangedHighlight = deltaStr !== "" && deltaStr !== "0";
-                        const rowAriaLabel = statusChangedHighlight
-                          ? `${r.change_kind}: ${r.url}. Numeric HTTP status differs between A and B, delta ${deltaStr}. Press Enter or Space to expand details.`
-                          : `${r.change_kind}: ${r.url}. Press Enter or Space to expand details.`;
+                        const rowAriaLabel = [
+                          statusChangedHighlight
+                            ? `${r.change_kind}: ${r.url}. Numeric HTTP status differs between A and B, delta ${deltaStr}.`
+                            : `${r.change_kind}: ${r.url}.`,
+                          open
+                            ? "Details expanded. Press Enter, Space, or Escape to collapse."
+                            : "Press Enter or Space to expand details.",
+                        ].join(" ");
                         return (
                           <Fragment key={`${r.change_kind}:${r.url}:${i}`}>
                             <tr
@@ -2961,6 +2967,12 @@ export default function CrawlPage() {
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
                                   e.preventDefault();
+                                  toggleCompareRowExpanded(rowKey);
+                                  return;
+                                }
+                                if (e.key === "Escape" && open) {
+                                  e.preventDefault();
+                                  e.stopPropagation();
                                   toggleCompareRowExpanded(rowKey);
                                 }
                               }}
