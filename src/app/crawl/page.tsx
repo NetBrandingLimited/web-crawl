@@ -724,6 +724,7 @@ export default function CrawlPage() {
   const compareRowDetailsActiveCountRef = useRef(0);
   const compareRowDetailsQueueRef = useRef<Array<() => void>>([]);
   const compareDetailsJobNonceRef = useRef(0);
+  const compareRowDetailsAbortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const [compareExportDetailsProgress, setCompareExportDetailsProgress] = useState<{
     label: string;
     loaded: number;
@@ -1127,6 +1128,10 @@ export default function CrawlPage() {
     setCompareRowDetailsError({});
     compareRowDetailsInFlightRef.current.clear();
     compareDetailsJobNonceRef.current += 1;
+    // Abort any in-flight detail fetches so we don't waste bandwidth on stale job pairs.
+    for (const ac of compareRowDetailsAbortControllersRef.current.values()) ac.abort();
+    compareRowDetailsAbortControllersRef.current.clear();
+    compareRowDetailsQueueRef.current = [];
     setComparePreviewStaleHint(false);
   }, [compareJobA, compareJobB]);
 
@@ -1278,6 +1283,8 @@ export default function CrawlPage() {
 
       const requestNonce = compareDetailsJobNonceRef.current;
       const p = new Promise<CompareRowDetails>((resolve, reject) => {
+        const ac = new AbortController();
+        compareRowDetailsAbortControllersRef.current.set(urlHash, ac);
         compareRowDetailsQueueRef.current.push(() => {
           void (async () => {
             compareRowDetailsActiveCountRef.current += 1;
@@ -1290,7 +1297,7 @@ export default function CrawlPage() {
               const u = `/api/v1/crawl-jobs/compare/row?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(
                 compareJobB,
               )}&url_hash=${encodeURIComponent(urlHash)}`;
-              const res = await fetch(u, { cache: "no-store" });
+              const res = await fetch(u, { cache: "no-store", signal: ac.signal });
               if (!res.ok) {
                 const detail = (await res.text().catch(() => "")).trim();
                 throw new Error(`HTTP ${res.status}${detail ? `: ${detail.slice(0, 180)}` : ""}`);
@@ -1308,12 +1315,17 @@ export default function CrawlPage() {
                 reject(e);
                 return;
               }
+              if (e instanceof Error && e.name === "AbortError") {
+                reject(e);
+                return;
+              }
               const msg = e instanceof Error ? e.message : "Could not load compare row details.";
               setCompareRowDetailsError((prev) => ({ ...prev, [urlHash]: msg }));
               reject(e);
             } finally {
               compareRowDetailsActiveCountRef.current -= 1;
               compareRowDetailsInFlightRef.current.delete(urlHash);
+              compareRowDetailsAbortControllersRef.current.delete(urlHash);
               setCompareRowDetailsLoading((prev) => {
                 if (!prev[urlHash]) return prev;
                 const next = { ...prev };
