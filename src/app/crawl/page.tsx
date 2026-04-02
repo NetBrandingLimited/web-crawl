@@ -1103,6 +1103,9 @@ export default function CrawlPage() {
     debouncedCompareFilterQ,
   ]);
 
+  const compareTextFilterPending =
+    compareTableFilterText.trim().toLowerCase() !== debouncedCompareFilterQ;
+
   const sortedFilteredCompareRows = useMemo(() => {
     const rows = [...filteredCompareRows];
     const dir = compareSortDir === "asc" ? 1 : -1;
@@ -2468,6 +2471,7 @@ export default function CrawlPage() {
                 <input
                   className="min-w-[14rem] flex-1 rounded-md border border-zinc-200 px-2 py-1 text-xs"
                   aria-label="Search loaded diff rows"
+                  aria-busy={compareTextFilterPending}
                   value={compareTableFilterText}
                   onChange={(e) => {
                     setComparePreset("all");
@@ -2516,7 +2520,14 @@ export default function CrawlPage() {
                   />
                   Status changes only
                 </label>
-                <span className="text-xs text-zinc-500">{filteredCompareRows.length} row(s)</span>
+                <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                  <span className="text-zinc-500">{filteredCompareRows.length} row(s)</span>
+                  {compareTextFilterPending ? (
+                    <span className="text-zinc-400" aria-live="polite">
+                      Applying search…
+                    </span>
+                  ) : null}
+                </span>
                 <button
                   type="button"
                   className={`rounded-md border px-2 py-1 text-[11px] ${
