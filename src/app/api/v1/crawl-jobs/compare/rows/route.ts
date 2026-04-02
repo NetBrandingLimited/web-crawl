@@ -100,88 +100,193 @@ export async function POST(req: Request) {
 
     let change_kind: "new_in_b" | "removed_in_a" | "changed";
     let changed_fields = "";
+    let row: Record<string, string | number>;
 
-    const row: Record<string, string | number> = {
-      change_kind: "" as "new_in_b" | "removed_in_a" | "changed",
-      changed_fields,
-      url,
-      depth_a: auditA ? auditA.depth : "",
-      depth_b: auditB ? auditB.depth : "",
-      http_status_a: auditA ? auditA.httpStatus ?? "" : "",
-      http_status_b: auditB ? auditB.httpStatus ?? "" : "",
-      title_a: normStr(auditA?.title),
-      title_b: normStr(auditB?.title),
-      canonical_a: normStr(auditA?.canonicalUrl),
-      canonical_b: normStr(auditB?.canonicalUrl),
-      meta_description_a: normStr(auditA?.metaDesc),
-      meta_description_b: normStr(auditB?.metaDesc),
-      word_count_a: auditA ? auditA.wordCount : "",
-      word_count_b: auditB ? auditB.wordCount : "",
-      h1_text_a: normStr(auditA?.h1Text),
-      h1_text_b: normStr(auditB?.h1Text),
-      h1_count_a: auditA ? auditA.h1Count : "",
-      h1_count_b: auditB ? auditB.h1Count : "",
-      content_type_a: normStr(auditA?.contentType),
-      content_type_b: normStr(auditB?.contentType),
-      robots_meta_a: normStr(auditA?.robotsMeta),
-      robots_meta_b: normStr(auditB?.robotsMeta),
-      meta_refresh_a: normStr(auditA?.metaRefreshContent),
-      meta_refresh_b: normStr(auditB?.metaRefreshContent),
-      content_hash_a: normStr(auditA?.contentHash),
-      content_hash_b: normStr(auditB?.contentHash),
-      x_robots_tag_a: normStr(auditA?.xRobotsTag),
-      x_robots_tag_b: normStr(auditB?.xRobotsTag),
-      html_lang_a: normStr(auditA?.htmlLang),
-      html_lang_b: normStr(auditB?.htmlLang),
-      response_time_ms_a: auditA ? auditA.responseTimeMs ?? "" : "",
-      response_time_ms_b: auditB ? auditB.responseTimeMs ?? "" : "",
-    };
-
-    if (auditA && !auditB) {
-      change_kind = "removed_in_a";
-    } else if (!auditA && auditB) {
+    // new_in_b
+    if (!auditA && auditB) {
+      const rb = auditB;
       change_kind = "new_in_b";
-    } else {
+      changed_fields = "";
+      row = {
+        change_kind,
+        changed_fields,
+        url,
+        depth_a: "",
+        depth_b: rb.depth,
+        http_status_a: "",
+        http_status_b: rb.httpStatus ?? "",
+        title_a: "",
+        title_b: normStr(rb.title),
+        canonical_a: "",
+        canonical_b: normStr(rb.canonicalUrl),
+        meta_description_a: "",
+        meta_description_b: normStr(rb.metaDesc),
+        word_count_a: "",
+        word_count_b: rb.wordCount,
+        h1_text_a: "",
+        h1_text_b: normStr(rb.h1Text),
+        h1_count_a: "",
+        h1_count_b: rb.h1Count,
+        content_type_a: "",
+        content_type_b: normStr(rb.contentType),
+        robots_meta_a: "",
+        robots_meta_b: normStr(rb.robotsMeta),
+        meta_refresh_a: "",
+        meta_refresh_b: normStr(rb.metaRefreshContent),
+        content_hash_a: "",
+        content_hash_b: normStr(rb.contentHash),
+        x_robots_tag_a: "",
+        x_robots_tag_b: normStr(rb.xRobotsTag),
+        html_lang_a: "",
+        html_lang_b: normStr(rb.htmlLang),
+        response_time_ms_a: "",
+        response_time_ms_b: rb.responseTimeMs ?? "",
+      };
+    }
+    // removed_in_a
+    else if (auditA && !auditB) {
+      const ra = auditA;
+      change_kind = "removed_in_a";
+      changed_fields = "";
+      row = {
+        change_kind,
+        changed_fields,
+        url,
+        depth_a: ra.depth,
+        depth_b: "",
+        http_status_a: ra.httpStatus ?? "",
+        http_status_b: "",
+        title_a: normStr(ra.title),
+        title_b: "",
+        canonical_a: normStr(ra.canonicalUrl),
+        canonical_b: "",
+        meta_description_a: normStr(ra.metaDesc),
+        meta_description_b: "",
+        word_count_a: ra.wordCount,
+        word_count_b: "",
+        h1_text_a: normStr(ra.h1Text),
+        h1_text_b: "",
+        h1_count_a: ra.h1Count,
+        h1_count_b: "",
+        content_type_a: normStr(ra.contentType),
+        content_type_b: "",
+        robots_meta_a: normStr(ra.robotsMeta),
+        robots_meta_b: "",
+        meta_refresh_a: normStr(ra.metaRefreshContent),
+        meta_refresh_b: "",
+        content_hash_a: normStr(ra.contentHash),
+        content_hash_b: "",
+        x_robots_tag_a: normStr(ra.xRobotsTag),
+        x_robots_tag_b: "",
+        html_lang_a: normStr(ra.htmlLang),
+        html_lang_b: "",
+        response_time_ms_a: ra.responseTimeMs ?? "",
+        response_time_ms_b: "",
+      };
+    }
+    // changed
+    else {
       const ra = auditA!;
       const rb = auditB!;
 
+      change_kind = "changed";
+
+      // Compute normalized (trimmed) strings once per side.
+      const titleA = normStr(ra.title);
+      const titleB = normStr(rb.title);
+      const canonicalA = normStr(ra.canonicalUrl);
+      const canonicalB = normStr(rb.canonicalUrl);
+      const metaDescA = normStr(ra.metaDesc);
+      const metaDescB = normStr(rb.metaDesc);
+      const h1TextA = normStr(ra.h1Text);
+      const h1TextB = normStr(rb.h1Text);
+      const contentTypeA = normStr(ra.contentType);
+      const contentTypeB = normStr(rb.contentType);
+      const robotsMetaA = normStr(ra.robotsMeta);
+      const robotsMetaB = normStr(rb.robotsMeta);
+      const metaRefreshA = normStr(ra.metaRefreshContent);
+      const metaRefreshB = normStr(rb.metaRefreshContent);
+      const contentHashA = normStr(ra.contentHash);
+      const contentHashB = normStr(rb.contentHash);
+      const xRobotsTagA = normStr(ra.xRobotsTag);
+      const xRobotsTagB = normStr(rb.xRobotsTag);
+      const htmlLangA = normStr(ra.htmlLang);
+      const htmlLangB = normStr(rb.htmlLang);
+
       const statusDiff = ra.httpStatus !== rb.httpStatus;
-      const titleDiff = normStr(ra.title) !== normStr(rb.title);
-      const canDiff = normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
-      const metaDiff = normStr(ra.metaDesc) !== normStr(rb.metaDesc);
+      const titleDiff = titleA !== titleB;
+      const canDiff = canonicalA !== canonicalB;
+      const metaDiff = metaDescA !== metaDescB;
       const wordDiff = ra.wordCount !== rb.wordCount;
-      const h1TextDiff = normStr(ra.h1Text) !== normStr(rb.h1Text);
+      const h1TextDiff = h1TextA !== h1TextB;
       const h1CountDiff = ra.h1Count !== rb.h1Count;
-      const contentTypeDiff = normStr(ra.contentType) !== normStr(rb.contentType);
-      const robotsDiff = normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
-      const metaRefreshDiff = normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
-      const contentHashDiff = normStr(ra.contentHash) !== normStr(rb.contentHash);
-      const xRobotsDiff = normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
-      const htmlLangDiff = normStr(ra.htmlLang) !== normStr(rb.htmlLang);
+      const contentTypeDiff = contentTypeA !== contentTypeB;
+      const robotsDiff = robotsMetaA !== robotsMetaB;
+      const metaRefreshDiff = metaRefreshA !== metaRefreshB;
+      const contentHashDiff = contentHashA !== contentHashB;
+      const xRobotsDiff = xRobotsTagA !== xRobotsTagB;
+      const htmlLangDiff = htmlLangA !== htmlLangB;
       const responseTimeDiff = ra.responseTimeMs !== rb.responseTimeMs;
 
-      const fields: string[] = [];
-      if (statusDiff) fields.push("status");
-      if (titleDiff) fields.push("title");
-      if (canDiff) fields.push("canonical");
-      if (metaDiff) fields.push("meta_description");
-      if (wordDiff) fields.push("word_count");
-      if (h1TextDiff) fields.push("h1_text");
-      if (h1CountDiff) fields.push("h1_count");
-      if (contentTypeDiff) fields.push("content_type");
-      if (robotsDiff) fields.push("robots_meta");
-      if (metaRefreshDiff) fields.push("meta_refresh");
-      if (contentHashDiff) fields.push("content_hash");
-      if (xRobotsDiff) fields.push("x_robots_tag");
-      if (htmlLangDiff) fields.push("html_lang");
-      if (responseTimeDiff) fields.push("response_time_ms");
+      // Build changed_fields incrementally to avoid allocating an array.
+      let outTokens = "";
+      const push = (token: string) => {
+        outTokens = outTokens === "" ? token : `${outTokens}|${token}`;
+      };
 
-      change_kind = "changed";
-      changed_fields = fields.join("|");
-      row.changed_fields = changed_fields;
+      if (statusDiff) push("status");
+      if (titleDiff) push("title");
+      if (canDiff) push("canonical");
+      if (metaDiff) push("meta_description");
+      if (wordDiff) push("word_count");
+      if (h1TextDiff) push("h1_text");
+      if (h1CountDiff) push("h1_count");
+      if (contentTypeDiff) push("content_type");
+      if (robotsDiff) push("robots_meta");
+      if (metaRefreshDiff) push("meta_refresh");
+      if (contentHashDiff) push("content_hash");
+      if (xRobotsDiff) push("x_robots_tag");
+      if (htmlLangDiff) push("html_lang");
+      if (responseTimeDiff) push("response_time_ms");
+
+      changed_fields = outTokens;
+
+      row = {
+        change_kind,
+        changed_fields,
+        url,
+        depth_a: ra.depth,
+        depth_b: rb.depth,
+        http_status_a: ra.httpStatus ?? "",
+        http_status_b: rb.httpStatus ?? "",
+        title_a: titleA,
+        title_b: titleB,
+        canonical_a: canonicalA,
+        canonical_b: canonicalB,
+        meta_description_a: metaDescA,
+        meta_description_b: metaDescB,
+        word_count_a: ra.wordCount,
+        word_count_b: rb.wordCount,
+        h1_text_a: h1TextA,
+        h1_text_b: h1TextB,
+        h1_count_a: ra.h1Count,
+        h1_count_b: rb.h1Count,
+        content_type_a: contentTypeA,
+        content_type_b: contentTypeB,
+        robots_meta_a: robotsMetaA,
+        robots_meta_b: robotsMetaB,
+        meta_refresh_a: metaRefreshA,
+        meta_refresh_b: metaRefreshB,
+        content_hash_a: contentHashA,
+        content_hash_b: contentHashB,
+        x_robots_tag_a: xRobotsTagA,
+        x_robots_tag_b: xRobotsTagB,
+        html_lang_a: htmlLangA,
+        html_lang_b: htmlLangB,
+        response_time_ms_a: ra.responseTimeMs ?? "",
+        response_time_ms_b: rb.responseTimeMs ?? "",
+      };
     }
-
-    row.change_kind = change_kind;
 
     out.push({ url_hash: h, row });
   }
