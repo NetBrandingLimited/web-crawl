@@ -2835,7 +2835,8 @@ export default function CrawlPage() {
                     id="compare-diff-table-hint"
                     className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500"
                   >
-                    Click a row to expand full A vs B field values; with the row focused, Enter or Space toggles and Escape collapses.
+                    Click a row to expand full A vs B field values. Row: Enter or Space toggles, Escape collapses. Tab into the expanded
+                    A/B grid to review values; Escape there collapses too.
                     Differing values are emphasized. Amber-tinted rows have a different{" "}
                     <span className="font-medium">numeric HTTP status</span> in A vs B (other changes alone do not get this tint).
                   </p>
@@ -3039,8 +3040,15 @@ export default function CrawlPage() {
                                   <div
                                     id={detailRegionId}
                                     role="region"
+                                    tabIndex={0}
                                     aria-label={`Baseline A and crawl B field values for ${r.url}`}
-                                    className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]"
+                                    className="grid max-w-6xl gap-x-4 gap-y-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/45 focus-visible:ring-offset-1 md:grid-cols-[minmax(7rem,9rem)_1fr_1fr]"
+                                    onKeyDownCapture={(e) => {
+                                      if (e.key !== "Escape") return;
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      toggleCompareRowExpanded(rowKey);
+                                    }}
                                   >
                                     <div className="border-b border-zinc-200 pb-1 font-semibold text-zinc-600">Field</div>
                                     <div className="border-b border-zinc-200 pb-1 font-mono font-semibold text-zinc-600">
