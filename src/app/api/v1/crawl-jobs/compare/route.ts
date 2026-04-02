@@ -128,20 +128,55 @@ export async function GET(req: Request) {
       title_b: string;
     };
 
-    function changedFieldsTokenList(ra: AuditRow, rb: AuditRow): string {
+    type NormFields = {
+      title: string;
+      canonicalUrl: string;
+      metaDesc: string;
+      h1Text: string;
+      contentType: string;
+      robotsMeta: string;
+      metaRefreshContent: string;
+      contentHash: string;
+      xRobotsTag: string;
+      htmlLang: string;
+    };
+
+    function buildNormMap(m: Map<string, AuditRow>): Map<string, NormFields> {
+      const out = new Map<string, NormFields>();
+      for (const [k, r] of m) {
+        out.set(k, {
+          title: normStr(r.title),
+          canonicalUrl: normStr(r.canonicalUrl),
+          metaDesc: normStr(r.metaDesc),
+          h1Text: normStr(r.h1Text),
+          contentType: normStr(r.contentType),
+          robotsMeta: normStr(r.robotsMeta),
+          metaRefreshContent: normStr(r.metaRefreshContent),
+          contentHash: normStr(r.contentHash),
+          xRobotsTag: normStr(r.xRobotsTag),
+          htmlLang: normStr(r.htmlLang),
+        });
+      }
+      return out;
+    }
+
+    const normA = buildNormMap(mapA);
+    const normB = buildNormMap(mapB);
+
+    function changedFieldsTokenList(ra: AuditRow, rb: AuditRow, na: NormFields, nb: NormFields): string {
       const statusDiff = ra.httpStatus !== rb.httpStatus;
-      const titleDiff = normStr(ra.title) !== normStr(rb.title);
-      const canDiff = normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
-      const metaDiff = normStr(ra.metaDesc) !== normStr(rb.metaDesc);
+      const titleDiff = na.title !== nb.title;
+      const canDiff = na.canonicalUrl !== nb.canonicalUrl;
+      const metaDiff = na.metaDesc !== nb.metaDesc;
       const wordDiff = ra.wordCount !== rb.wordCount;
-      const h1TextDiff = normStr(ra.h1Text) !== normStr(rb.h1Text);
+      const h1TextDiff = na.h1Text !== nb.h1Text;
       const h1CountDiff = ra.h1Count !== rb.h1Count;
-      const contentTypeDiff = normStr(ra.contentType) !== normStr(rb.contentType);
-      const robotsDiff = normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
-      const metaRefreshDiff = normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
-      const contentHashDiff = normStr(ra.contentHash) !== normStr(rb.contentHash);
-      const xRobotsDiff = normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
-      const htmlLangDiff = normStr(ra.htmlLang) !== normStr(rb.htmlLang);
+      const contentTypeDiff = na.contentType !== nb.contentType;
+      const robotsDiff = na.robotsMeta !== nb.robotsMeta;
+      const metaRefreshDiff = na.metaRefreshContent !== nb.metaRefreshContent;
+      const contentHashDiff = na.contentHash !== nb.contentHash;
+      const xRobotsDiff = na.xRobotsTag !== nb.xRobotsTag;
+      const htmlLangDiff = na.htmlLang !== nb.htmlLang;
       const responseTimeDiff = ra.responseTimeMs !== rb.responseTimeMs;
 
       const fields: string[] = [];
@@ -163,21 +198,21 @@ export async function GET(req: Request) {
       return fields.join("|");
     }
 
-    function rowHasAnyDiff(ra: AuditRow, rb: AuditRow): boolean {
+    function rowHasAnyDiff(ra: AuditRow, rb: AuditRow, na: NormFields, nb: NormFields): boolean {
       // Early-exit: once any difference is found, we can treat the row as changed.
       if (ra.httpStatus !== rb.httpStatus) return true;
-      if (normStr(ra.title) !== normStr(rb.title)) return true;
-      if (normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl)) return true;
-      if (normStr(ra.metaDesc) !== normStr(rb.metaDesc)) return true;
+      if (na.title !== nb.title) return true;
+      if (na.canonicalUrl !== nb.canonicalUrl) return true;
+      if (na.metaDesc !== nb.metaDesc) return true;
       if (ra.wordCount !== rb.wordCount) return true;
-      if (normStr(ra.h1Text) !== normStr(rb.h1Text)) return true;
+      if (na.h1Text !== nb.h1Text) return true;
       if (ra.h1Count !== rb.h1Count) return true;
-      if (normStr(ra.contentType) !== normStr(rb.contentType)) return true;
-      if (normStr(ra.robotsMeta) !== normStr(rb.robotsMeta)) return true;
-      if (normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent)) return true;
-      if (normStr(ra.contentHash) !== normStr(rb.contentHash)) return true;
-      if (normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag)) return true;
-      if (normStr(ra.htmlLang) !== normStr(rb.htmlLang)) return true;
+      if (na.contentType !== nb.contentType) return true;
+      if (na.robotsMeta !== nb.robotsMeta) return true;
+      if (na.metaRefreshContent !== nb.metaRefreshContent) return true;
+      if (na.contentHash !== nb.contentHash) return true;
+      if (na.xRobotsTag !== nb.xRobotsTag) return true;
+      if (na.htmlLang !== nb.htmlLang) return true;
       if (ra.responseTimeMs !== rb.responseTimeMs) return true;
       return false;
     }
@@ -220,7 +255,10 @@ export async function GET(req: Request) {
       const rb = mapB.get(h);
       if (!rb) continue;
 
-      if (!rowHasAnyDiff(ra, rb)) continue;
+      const na = normA.get(h);
+      const nb = normB.get(h);
+      if (!na || !nb) continue;
+      if (!rowHasAnyDiff(ra, rb, na, nb)) continue;
 
       previewRows.push({
         change_kind: "changed",
@@ -294,22 +332,25 @@ export async function GET(req: Request) {
       const ra = mapA.get(pr.url_hash);
       const rb = mapB.get(pr.url_hash);
       if (!ra || !rb) continue;
-      pr.changed_fields = changedFieldsTokenList(ra, rb);
+      const na = normA.get(pr.url_hash);
+      const nb = normB.get(pr.url_hash);
+      if (!na || !nb) continue;
+      pr.changed_fields = changedFieldsTokenList(ra, rb, na, nb);
     }
 
     // Defer `trim()`-based title fields until after we slice the current page.
     for (const pr of pageRows) {
       if (pr.change_kind === "new_in_b") {
-        const rb = mapB.get(pr.url_hash);
-        if (rb) pr.title_b = normStr(rb.title);
+        const nb = normB.get(pr.url_hash);
+        if (nb) pr.title_b = nb.title;
       } else if (pr.change_kind === "removed_in_a") {
-        const ra = mapA.get(pr.url_hash);
-        if (ra) pr.title_a = normStr(ra.title);
+        const na = normA.get(pr.url_hash);
+        if (na) pr.title_a = na.title;
       } else {
-        const ra = mapA.get(pr.url_hash);
-        const rb = mapB.get(pr.url_hash);
-        if (ra) pr.title_a = normStr(ra.title);
-        if (rb) pr.title_b = normStr(rb.title);
+        const na = normA.get(pr.url_hash);
+        const nb = normB.get(pr.url_hash);
+        if (na) pr.title_a = na.title;
+        if (nb) pr.title_b = nb.title;
       }
     }
     const nextOffset = offset + pageRows.length;
