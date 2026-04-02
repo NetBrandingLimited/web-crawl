@@ -1387,6 +1387,50 @@ export default function CrawlPage() {
     return out;
   }
 
+  async function fetchCompareRowDetailsBulkBatched(
+    urlHashes: string[],
+    batchSize: number,
+    onProgress?: (loaded: number, total: number) => void,
+    initialLoaded = 0,
+  ): Promise<Record<string, CompareRowDetails>> {
+    const detailsByHash: Record<string, CompareRowDetails> = {};
+    let loaded = initialLoaded;
+    const total = urlHashes.length;
+
+    for (let i = 0; i < urlHashes.length; i += batchSize) {
+      const chunk = urlHashes.slice(i, i + batchSize);
+      const res = await fetch("/api/v1/crawl-jobs/compare/rows", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ a: compareJobA, b: compareJobB, url_hashes: chunk }),
+      });
+      if (!res.ok) {
+        const detail = (await res.text().catch(() => "")).trim();
+        throw new Error(`Bulk compare row details failed (HTTP ${res.status})${detail ? `: ${detail.slice(0, 220)}` : ""}`);
+      }
+      const json = (await res.json()) as { rows?: Array<{ url_hash?: string; row?: Record<string, unknown> }> };
+      const updates: Record<string, CompareRowDetails> = {};
+      const rowsOut = Array.isArray(json.rows) ? json.rows : [];
+
+      for (const item of rowsOut) {
+        const h = item.url_hash;
+        const row = item.row ?? {};
+        if (!h) continue;
+        const details = Object.fromEntries(
+          COMPARE_FULL_CSV_HEADERS.map((f) => [f, String((row as Record<string, unknown>)[f] ?? "")]),
+        ) as CompareRowDetails;
+        detailsByHash[h] = details;
+        updates[h] = details;
+      }
+
+      setCompareRowDetailsCache((prev) => ({ ...prev, ...updates }));
+      loaded += chunk.length;
+      onProgress?.(loaded, total);
+    }
+
+    return detailsByHash;
+  }
+
   /** Home/End/Page/Arrow navigation within the current on-screen table page. Returns true if the key was handled. */
   const applyCompareTableRowNavKeys = useCallback(
     (e: { key: string; preventDefault: () => void }, rowIndex: number): boolean => {
@@ -2084,23 +2128,40 @@ export default function CrawlPage() {
     }
     try {
       const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
+      const total = filteredCompareRows.length;
+      const detailsByHash: Record<string, CompareRowDetails> = {};
+      const missing: string[] = [];
+      for (const r of filteredCompareRows) {
+        const h = r.url_hash;
+        const cached = compareRowDetailsCacheRef.current[h];
+        if (cached) detailsByHash[h] = cached;
+        else missing.push(h);
+      }
+      const loadedStart = total - missing.length;
       setCompareExportDetailsProgress({
         label: "Preparing full CSV",
-        loaded: 0,
-        total: filteredCompareRows.length,
+        loaded: loadedStart,
+        total,
       });
-      const detailsList = await fetchCompareRowDetailsConcurrently(
-        filteredCompareRows,
-        6,
-        (loaded) =>
-          setCompareExportDetailsProgress((p) => {
-            if (!p) return p;
-            return { ...p, loaded };
-          }),
-      );
+
+      if (missing.length > 0) {
+        const bulkDetails = await fetchCompareRowDetailsBulkBatched(
+          missing,
+          50,
+          (loaded) =>
+            setCompareExportDetailsProgress((p) => {
+              if (!p) return p;
+              return { ...p, loaded };
+            }),
+          loadedStart,
+        );
+        Object.assign(detailsByHash, bulkDetails);
+      }
+
       for (let i = 0; i < filteredCompareRows.length; i += 1) {
-        const details = detailsList[i];
-        lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(details[h])).join(","));
+        const h = filteredCompareRows[i].url_hash;
+        const details = detailsByHash[h] ?? compareRowDetailsCacheRef.current[h];
+        lines.push(COMPARE_FULL_CSV_HEADERS.map((f) => escapeCsvCell(details[f])).join(","));
       }
       const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
       const objectUrl = URL.createObjectURL(blob);
@@ -2131,23 +2192,40 @@ export default function CrawlPage() {
     }
     try {
       const lines = [COMPARE_FULL_CSV_HEADERS.join(",")];
+      const total = visibleSortedCompareRows.length;
+      const detailsByHash: Record<string, CompareRowDetails> = {};
+      const missing: string[] = [];
+      for (const r of visibleSortedCompareRows) {
+        const h = r.url_hash;
+        const cached = compareRowDetailsCacheRef.current[h];
+        if (cached) detailsByHash[h] = cached;
+        else missing.push(h);
+      }
+      const loadedStart = total - missing.length;
       setCompareExportDetailsProgress({
         label: "Preparing page CSV",
-        loaded: 0,
-        total: visibleSortedCompareRows.length,
+        loaded: loadedStart,
+        total,
       });
-      const detailsList = await fetchCompareRowDetailsConcurrently(
-        visibleSortedCompareRows,
-        6,
-        (loaded) =>
-          setCompareExportDetailsProgress((p) => {
-            if (!p) return p;
-            return { ...p, loaded };
-          }),
-      );
+
+      if (missing.length > 0) {
+        const bulkDetails = await fetchCompareRowDetailsBulkBatched(
+          missing,
+          50,
+          (loaded) =>
+            setCompareExportDetailsProgress((p) => {
+              if (!p) return p;
+              return { ...p, loaded };
+            }),
+          loadedStart,
+        );
+        Object.assign(detailsByHash, bulkDetails);
+      }
+
       for (let i = 0; i < visibleSortedCompareRows.length; i += 1) {
-        const details = detailsList[i];
-        lines.push(COMPARE_FULL_CSV_HEADERS.map((h) => escapeCsvCell(details[h])).join(","));
+        const h = visibleSortedCompareRows[i].url_hash;
+        const details = detailsByHash[h] ?? compareRowDetailsCacheRef.current[h];
+        lines.push(COMPARE_FULL_CSV_HEADERS.map((f) => escapeCsvCell(details[f])).join(","));
       }
       const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
       const objectUrl = URL.createObjectURL(blob);
