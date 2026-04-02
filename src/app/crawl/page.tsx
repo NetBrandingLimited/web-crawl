@@ -2365,7 +2365,14 @@ export default function CrawlPage() {
               role="alert"
               aria-live="assertive"
             >
-              <span className="min-w-0 flex-1 basis-[min(100%,28rem)]">{comparePreviewError}</span>
+              <div className="min-w-0 flex-1 basis-[min(100%,28rem)]">
+                <p>{comparePreviewError}</p>
+                <p className="mt-1.5 text-xs font-normal leading-snug text-red-900/80">
+                  The paginated preview failed, but if the compare API is otherwise reachable you can still try{" "}
+                  <span className="font-medium">Download compare CSV</span> or <span className="font-medium">JSON</span> below for a full
+                  export (separate from the on-page filters).
+                </p>
+              </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <button
                   type="button"
