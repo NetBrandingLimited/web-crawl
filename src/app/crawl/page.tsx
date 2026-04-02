@@ -2505,13 +2505,19 @@ export default function CrawlPage() {
           return !cached && !inflight && !isLoading && !err;
         }) as string[];
       if (hashes.length === 0) return;
-      void Promise.allSettled(hashes.map((h) => ensureCompareRowDetails(h)));
+      if (hashes.length === 1) {
+        void ensureCompareRowDetails(hashes[0]).catch(() => {});
+        return;
+      }
+      // Two adjacent rows: cheaper to fetch in one bulk call than N individual requests.
+      void fetchCompareRowDetailsBulkBatched(hashes, hashes.length).catch(() => {});
     }, [
       prefetchPrevUrlHash,
       prefetchNextUrlHash,
       compareJobA,
       compareJobB,
       ensureCompareRowDetails,
+      fetchCompareRowDetailsBulkBatched,
       compareRowDetailsLoading,
       compareRowDetailsError,
     ]);
