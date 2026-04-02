@@ -167,16 +167,17 @@ export async function GET(req: Request) {
       // Early-exit: once any difference is found, we can treat the row as changed.
       if (ra.httpStatus !== rb.httpStatus) return true;
       // For string fields: if raw values are already strictly equal, skip `trim()` work.
+      if (ra.wordCount !== rb.wordCount) return true;
       if (ra.title !== rb.title && normStr(ra.title) !== normStr(rb.title)) return true;
+      // `contentHash` is a strong signal that the page changed; check it earlier to reduce work.
+      if (ra.contentHash !== rb.contentHash && normStr(ra.contentHash) !== normStr(rb.contentHash)) return true;
       if (ra.canonicalUrl !== rb.canonicalUrl && normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl)) return true;
       if (ra.metaDesc !== rb.metaDesc && normStr(ra.metaDesc) !== normStr(rb.metaDesc)) return true;
-      if (ra.wordCount !== rb.wordCount) return true;
       if (ra.h1Text !== rb.h1Text && normStr(ra.h1Text) !== normStr(rb.h1Text)) return true;
       if (ra.h1Count !== rb.h1Count) return true;
       if (ra.contentType !== rb.contentType && normStr(ra.contentType) !== normStr(rb.contentType)) return true;
       if (ra.robotsMeta !== rb.robotsMeta && normStr(ra.robotsMeta) !== normStr(rb.robotsMeta)) return true;
       if (ra.metaRefreshContent !== rb.metaRefreshContent && normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent)) return true;
-      if (ra.contentHash !== rb.contentHash && normStr(ra.contentHash) !== normStr(rb.contentHash)) return true;
       if (ra.xRobotsTag !== rb.xRobotsTag && normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag)) return true;
       if (ra.htmlLang !== rb.htmlLang && normStr(ra.htmlLang) !== normStr(rb.htmlLang)) return true;
       if (ra.responseTimeMs !== rb.responseTimeMs) return true;
@@ -188,12 +189,10 @@ export async function GET(req: Request) {
     type ChangedCand = {
       url_hash: string;
       url: string;
-      http_status_a: number | string;
-      http_status_b: number | string;
       i: number; // insertion order for stable tie-breaking
     };
-    type NewInBCand = { url_hash: string; url: string; http_status_b: number | string; i: number };
-    type RemovedInACand = { url_hash: string; url: string; http_status_a: number | string; i: number };
+    type NewInBCand = { url_hash: string; url: string; i: number };
+    type RemovedInACand = { url_hash: string; url: string; i: number };
 
     const changedCands: ChangedCand[] = [];
     const newInBCands: NewInBCand[] = [];
@@ -204,7 +203,6 @@ export async function GET(req: Request) {
         newInBCands.push({
           url_hash: h,
           url: rb.url,
-          http_status_b: rb.httpStatus ?? "",
           i: newInBCands.length,
         });
       }
@@ -215,7 +213,6 @@ export async function GET(req: Request) {
         removedInACands.push({
           url_hash: h,
           url: ra.url,
-          http_status_a: ra.httpStatus ?? "",
           i: removedInACands.length,
         });
       }
@@ -229,8 +226,6 @@ export async function GET(req: Request) {
       changedCands.push({
         url_hash: h,
         url: ra.url,
-        http_status_a: ra.httpStatus ?? "",
-        http_status_b: rb.httpStatus ?? "",
         i: changedCands.length,
       });
     }
@@ -368,8 +363,8 @@ export async function GET(req: Request) {
         changed_fields: changedFieldsTokenList(ra, rb),
         url_hash: cand.url_hash,
         url: cand.url,
-        http_status_a: cand.http_status_a,
-        http_status_b: cand.http_status_b,
+        http_status_a: ra.httpStatus ?? "",
+        http_status_b: rb.httpStatus ?? "",
         title_a: normStr(ra.title),
         title_b: normStr(rb.title),
       });
@@ -383,7 +378,7 @@ export async function GET(req: Request) {
         url_hash: cand.url_hash,
         url: cand.url,
         http_status_a: "",
-        http_status_b: cand.http_status_b,
+        http_status_b: rb ? rb.httpStatus ?? "" : "",
         title_a: "",
         title_b: rb ? normStr(rb.title) : "",
       });
@@ -396,7 +391,7 @@ export async function GET(req: Request) {
         changed_fields: "",
         url_hash: cand.url_hash,
         url: cand.url,
-        http_status_a: cand.http_status_a,
+        http_status_a: ra ? ra.httpStatus ?? "" : "",
         http_status_b: "",
         title_a: ra ? normStr(ra.title) : "",
         title_b: "",
