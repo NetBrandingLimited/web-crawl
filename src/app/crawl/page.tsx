@@ -3256,7 +3256,8 @@ export default function CrawlPage() {
                   type="button"
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
                   onClick={() => void downloadFilteredCompareFullCsv()}
-                  disabled={filteredCompareRows.length === 0}
+                  disabled={filteredCompareRows.length === 0 || compareExportDetailsProgress != null}
+                  aria-busy={compareExportDetailsProgress != null}
                 >
                   Download filtered full CSV
                 </button>
@@ -3264,7 +3265,8 @@ export default function CrawlPage() {
                   type="button"
                   className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
                   onClick={() => void downloadVisibleComparePageCsv()}
-                  disabled={visibleSortedCompareRows.length === 0}
+                  disabled={visibleSortedCompareRows.length === 0 || compareExportDetailsProgress != null}
+                  aria-busy={compareExportDetailsProgress != null}
                 >
                   Download current page CSV
                 </button>
@@ -3293,7 +3295,13 @@ export default function CrawlPage() {
                   type="button"
                   className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
                   onClick={() => autoLoadAllAndExportFilteredCsv()}
-                  disabled={!compareJobA || !compareJobB || compareJobA === compareJobB || compareDiffPreview.loading}
+                  disabled={
+                    !compareJobA ||
+                    !compareJobB ||
+                    compareJobA === compareJobB ||
+                    compareDiffPreview.loading ||
+                    compareExportDetailsProgress != null
+                  }
                 >
                   {compareExportAfterAutoLoad ? "Auto-load + export pending…" : "Auto-load all + export filtered CSV"}
                 </button>
