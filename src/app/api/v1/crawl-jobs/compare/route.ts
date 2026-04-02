@@ -217,36 +217,37 @@ export async function GET(req: Request) {
       return false;
     }
 
-    const previewRows: PreviewRow[] = [];
+    // Performance: avoid building/sorting full `PreviewRow` objects for all diff candidates.
+    // For pagination we only construct the rows that fall inside the current `[offset, offset+limit)` slice.
+    type ChangedCand = {
+      url_hash: string;
+      url: string;
+      http_status_a: number | string;
+      http_status_b: number | string;
+    };
+    type NewInBCand = { url_hash: string; url: string; http_status_b: number | string };
+    type RemovedInACand = { url_hash: string; url: string; http_status_a: number | string };
+
+    const changedCands: ChangedCand[] = [];
+    const newInBCands: NewInBCand[] = [];
+    const removedInACands: RemovedInACand[] = [];
 
     for (const [h, rb] of mapB) {
       if (!mapA.has(h)) {
-        previewRows.push({
-          change_kind: "new_in_b",
-          changed_fields: "",
+        newInBCands.push({
           url_hash: h,
           url: rb.url,
-          http_status_a: "",
           http_status_b: rb.httpStatus ?? "",
-          title_a: "",
-          // Defer `trim()` until after we slice the current page.
-          title_b: "",
         });
       }
     }
 
     for (const [h, ra] of mapA) {
       if (!mapB.has(h)) {
-        previewRows.push({
-          change_kind: "removed_in_a",
-          changed_fields: "",
+        removedInACands.push({
           url_hash: h,
           url: ra.url,
           http_status_a: ra.httpStatus ?? "",
-          http_status_b: "",
-          // Defer `trim()` until after we slice the current page.
-          title_a: "",
-          title_b: "",
         });
       }
     }
@@ -260,42 +261,24 @@ export async function GET(req: Request) {
       if (!na || !nb) continue;
       if (!rowHasAnyDiff(ra, rb, na, nb)) continue;
 
-      previewRows.push({
-        change_kind: "changed",
-        // Defer computing `changed_fields` until we know this row is in the current page slice.
-        changed_fields: "",
+      changedCands.push({
         url_hash: h,
         url: ra.url,
         http_status_a: ra.httpStatus ?? "",
         http_status_b: rb.httpStatus ?? "",
-        // Defer `trim()` until after we slice the current page.
-        title_a: "",
-        title_b: "",
       });
     }
 
-    // Performance: avoid `localeCompare` inside a hot `sort` comparator.
-    // Keep the same ordering as the previous lexicographic `change_kind` comparison:
-    // "changed" < "new_in_b" < "removed_in_a", then by `url`.
-    const kindRank = (k: PreviewRow["change_kind"]) => (k === "changed" ? 0 : k === "new_in_b" ? 1 : 2);
-    previewRows.sort((x, y) => {
-      const o = kindRank(x.change_kind) - kindRank(y.change_kind);
-      if (o !== 0) return o;
-      // URL strings are typically ASCII; `<`/`>` is fast and deterministic for same runtime.
-      if (x.url < y.url) return -1;
-      if (x.url > y.url) return 1;
-      return 0;
-    });
+    // Keep the same ordering as the previous global sort:
+    // "changed" < "new_in_b" < "removed_in_a", then by `url` ascending.
+    const urlSort = (a: { url: string }, b: { url: string }) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0);
+    changedCands.sort(urlSort);
+    newInBCands.sort(urlSort);
+    removedInACands.sort(urlSort);
 
-    let newInB = 0;
-    let removedInA = 0;
-    let changed = 0;
-    for (const r of previewRows) {
-      const k = r.change_kind;
-      if (k === "new_in_b") newInB += 1;
-      else if (k === "removed_in_a") removedInA += 1;
-      else if (k === "changed") changed += 1;
-    }
+    const newInB = newInBCands.length;
+    const removedInA = removedInACands.length;
+    const changed = changedCands.length;
     const counts = {
       new_in_b: newInB,
       removed_in_a: removedInA,
@@ -303,7 +286,7 @@ export async function GET(req: Request) {
       pages_in_a: auditsA.length,
       pages_in_b: auditsB.length,
     };
-    const totalDiffRows = previewRows.length;
+    const totalDiffRows = changed + newInB + removedInA;
 
     const rawCursor = searchParams.get("cursor");
     let offset = 0;
@@ -324,35 +307,64 @@ export async function GET(req: Request) {
       );
     }
 
-    const pageRows = previewRows.slice(offset, offset + pageLimit);
+    const pageRows: PreviewRow[] = [];
 
-    // Fill in `changed_fields` only for rows that are actually returned.
-    for (const pr of pageRows) {
-      if (pr.change_kind !== "changed") continue;
-      const ra = mapA.get(pr.url_hash);
-      const rb = mapB.get(pr.url_hash);
-      if (!ra || !rb) continue;
-      const na = normA.get(pr.url_hash);
-      const nb = normB.get(pr.url_hash);
-      if (!na || !nb) continue;
-      pr.changed_fields = changedFieldsTokenList(ra, rb, na, nb);
-    }
+    const changedLen = changedCands.length;
+    const newLen = newInBCands.length;
+    const removedLen = removedInACands.length;
 
-    // Defer `trim()`-based title fields until after we slice the current page.
-    for (const pr of pageRows) {
-      if (pr.change_kind === "new_in_b") {
-        const nb = normB.get(pr.url_hash);
-        if (nb) pr.title_b = nb.title;
-      } else if (pr.change_kind === "removed_in_a") {
-        const na = normA.get(pr.url_hash);
-        if (na) pr.title_a = na.title;
+    const endExclusive = Math.min(totalDiffRows, offset + pageLimit);
+
+    // Global ordering: [changed][new_in_b][removed_in_a], each sorted by `url`.
+    // We only materialize rows whose global index falls inside [offset, endExclusive).
+    for (let globalIdx = offset; globalIdx < endExclusive; globalIdx++) {
+      if (globalIdx < changedLen) {
+        const cand = changedCands[globalIdx];
+        const ra = mapA.get(cand.url_hash);
+        const rb = mapB.get(cand.url_hash);
+        const na = normA.get(cand.url_hash);
+        const nb = normB.get(cand.url_hash);
+        pageRows.push({
+          change_kind: "changed",
+          changed_fields: ra && rb && na && nb ? changedFieldsTokenList(ra, rb, na, nb) : "",
+          url_hash: cand.url_hash,
+          url: cand.url,
+          http_status_a: cand.http_status_a,
+          http_status_b: cand.http_status_b,
+          title_a: na?.title ?? "",
+          title_b: nb?.title ?? "",
+        });
+      } else if (globalIdx < changedLen + newLen) {
+        const idxWithin = globalIdx - changedLen;
+        const cand = newInBCands[idxWithin];
+        const nb = normB.get(cand.url_hash);
+        pageRows.push({
+          change_kind: "new_in_b",
+          changed_fields: "",
+          url_hash: cand.url_hash,
+          url: cand.url,
+          http_status_a: "",
+          http_status_b: cand.http_status_b,
+          title_a: "",
+          title_b: nb?.title ?? "",
+        });
       } else {
-        const na = normA.get(pr.url_hash);
-        const nb = normB.get(pr.url_hash);
-        if (na) pr.title_a = na.title;
-        if (nb) pr.title_b = nb.title;
+        const idxWithin = globalIdx - (changedLen + newLen);
+        const cand = removedInACands[idxWithin];
+        const na = normA.get(cand.url_hash);
+        pageRows.push({
+          change_kind: "removed_in_a",
+          changed_fields: "",
+          url_hash: cand.url_hash,
+          url: cand.url,
+          http_status_a: cand.http_status_a,
+          http_status_b: "",
+          title_a: na?.title ?? "",
+          title_b: "",
+        });
       }
     }
+
     const nextOffset = offset + pageRows.length;
     const next_cursor = nextOffset < totalDiffRows ? encodeCompareJsonCursor(nextOffset) : null;
 
