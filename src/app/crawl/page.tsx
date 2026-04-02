@@ -205,6 +205,23 @@ function compareRowStatusDeltaLabel(r: CompareDiffRow): string {
   return `${delta > 0 ? "+" : ""}${delta}`;
 }
 
+function compareThAriaSort(
+  columnKey: CompareSortKey,
+  activeKey: CompareSortKey,
+  activeDir: "asc" | "desc",
+): "ascending" | "descending" | undefined {
+  if (activeKey !== columnKey) return undefined;
+  return activeDir === "asc" ? "ascending" : "descending";
+}
+
+function compareStatusPairThAriaSort(
+  activeKey: CompareSortKey,
+  activeDir: "asc" | "desc",
+): "ascending" | "descending" | undefined {
+  if (activeKey !== "status_a" && activeKey !== "status_b") return undefined;
+  return activeDir === "asc" ? "ascending" : "descending";
+}
+
 type CrawlUrlsResponse = {
   items: Array<{
     id: string;
@@ -2386,7 +2403,7 @@ export default function CrawlPage() {
                     setCompareFieldAnyOf(null);
                     setCompareTableFilterText(e.target.value);
                   }}
-                  placeholder="Filter diff rows by URL/title/status/fields…"
+                  placeholder="Filter by URL, title, fields, status delta, or status_delta…"
                   type="search"
                 />
                 <select
@@ -2710,16 +2727,29 @@ export default function CrawlPage() {
                 {filteredCompareRows.length === 0 ? (
                   <div className="px-3 py-4 text-xs text-zinc-500">No compare rows match the current filters.</div>
                 ) : (
-                  <p className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500">
+                  <p
+                    id="compare-diff-table-hint"
+                    className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500"
+                  >
                     Click a row to expand full A vs B field values. Differing values are emphasized. Amber-tinted rows have a different{" "}
                     <span className="font-medium">numeric HTTP status</span> in A vs B (other changes alone do not get this tint).
                   </p>
                 )}
                 {filteredCompareRows.length === 0 ? null : (
-                  <table className="min-w-full text-left text-xs">
+                  <table
+                    className="min-w-full text-left text-xs"
+                    aria-describedby="compare-diff-table-hint"
+                  >
+                    <caption className="sr-only">
+                      Crawl compare diff. Each row compares the same URL in baseline A and crawl B; activate a row to expand field details.
+                    </caption>
                     <thead className="sticky top-0 z-10 bg-zinc-50 text-zinc-500">
                       <tr>
-                        <th className="px-3 py-2 font-medium">
+                        <th
+                          scope="col"
+                          className="px-3 py-2 font-medium"
+                          aria-sort={compareThAriaSort("kind", compareSortKey, compareSortDir)}
+                        >
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 hover:text-zinc-700"
@@ -2728,7 +2758,11 @@ export default function CrawlPage() {
                             Kind {compareSortKey === "kind" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
                           </button>
                         </th>
-                        <th className="px-3 py-2 font-medium">
+                        <th
+                          scope="col"
+                          className="px-3 py-2 font-medium"
+                          aria-sort={compareThAriaSort("url", compareSortKey, compareSortDir)}
+                        >
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 hover:text-zinc-700"
@@ -2737,7 +2771,11 @@ export default function CrawlPage() {
                             URL {compareSortKey === "url" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
                           </button>
                         </th>
-                        <th className="px-3 py-2 font-medium">
+                        <th
+                          scope="col"
+                          className="px-3 py-2 font-medium"
+                          aria-sort={compareThAriaSort("fields", compareSortKey, compareSortDir)}
+                        >
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 hover:text-zinc-700"
@@ -2746,7 +2784,11 @@ export default function CrawlPage() {
                             Changed fields {compareSortKey === "fields" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
                           </button>
                         </th>
-                        <th className="px-3 py-2 font-medium">
+                        <th
+                          scope="col"
+                          className="px-3 py-2 font-medium"
+                          aria-sort={compareStatusPairThAriaSort(compareSortKey, compareSortDir)}
+                        >
                           <div className="inline-flex items-center gap-2">
                             <button
                               type="button"
@@ -2755,7 +2797,7 @@ export default function CrawlPage() {
                             >
                               Status A {compareSortKey === "status_a" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
                             </button>
-                            <span>/</span>
+                            <span aria-hidden>/</span>
                             <button
                               type="button"
                               className="inline-flex items-center gap-1 hover:text-zinc-700"
@@ -2765,13 +2807,21 @@ export default function CrawlPage() {
                             </button>
                           </div>
                         </th>
-                        <th className="px-3 py-2 font-medium">
+                        <th
+                          scope="col"
+                          className="px-3 py-2 font-medium"
+                          aria-sort={compareThAriaSort("status_delta", compareSortKey, compareSortDir)}
+                        >
                           <button
                             type="button"
                             className="inline-flex items-center gap-1 hover:text-zinc-700"
                             onClick={() => setCompareSortFromHeader("status_delta")}
                           >
-                            Status Δ {compareSortKey === "status_delta" ? (compareSortDir === "asc" ? "↑" : "↓") : ""}
+                            Status{" "}
+                            <abbr title="Delta: HTTP status B minus A" className="no-underline">
+                              Δ
+                            </abbr>
+                            {compareSortKey === "status_delta" ? (compareSortDir === "asc" ? " ↑" : " ↓") : ""}
                           </button>
                         </th>
                       </tr>
