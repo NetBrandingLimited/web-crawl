@@ -678,6 +678,8 @@ export default function CrawlPage() {
   const [copiedCompareRowUrl, setCopiedCompareRowUrl] = useState<string | null>(null);
   const [compareUrlListCopyNotice, setCompareUrlListCopyNotice] = useState<string | null>(null);
   const [compareLoadMoreError, setCompareLoadMoreError] = useState<string | null>(null);
+  /** Initial compare preview fetch failed (HTTP error, bad JSON shape, or network). */
+  const [comparePreviewError, setComparePreviewError] = useState<string | null>(null);
   const [compareAutoLoadAll, setCompareAutoLoadAll] = useState(false);
   const [compareExportAfterAutoLoad, setCompareExportAfterAutoLoad] = useState(false);
   const comparePreviewAbortRef = useRef<AbortController | null>(null);
@@ -986,11 +988,13 @@ export default function CrawlPage() {
       comparePreviewAbortRef.current = null;
       setCompareDiffPreview(null);
       setCompareLoadMoreError(null);
+      setComparePreviewError(null);
       setCompareAutoLoadAll(false);
       setCompareExportAfterAutoLoad(false);
       return;
     }
     setCompareLoadMoreError(null);
+    setComparePreviewError(null);
     setCompareDiffPreview({
       loading: true,
       loadingMore: false,
@@ -1008,7 +1012,13 @@ export default function CrawlPage() {
         try {
           const res = await fetch(u, { cache: "no-store", signal: ac.signal });
           if (!res.ok) {
-            if (!ac.signal.aborted) setCompareDiffPreview(null);
+            if (!ac.signal.aborted) {
+              const detail = (await res.text().catch(() => "")).trim();
+              setComparePreviewError(
+                `Could not load compare preview (HTTP ${res.status}).${detail ? ` ${detail.slice(0, 220)}` : ""}`,
+              );
+              setCompareDiffPreview(null);
+            }
             return;
           }
           const json = (await res.json()) as {
@@ -1033,6 +1043,7 @@ export default function CrawlPage() {
           ) {
             const nextC = json.next_cursor;
             const total = json.total_diff_rows;
+            setComparePreviewError(null);
             setCompareDiffPreview({
               loading: false,
               loadingMore: false,
@@ -1042,11 +1053,21 @@ export default function CrawlPage() {
               totalDiffRows: typeof total === "number" ? total : rows.length,
             });
           } else {
-            setCompareDiffPreview(null);
+            if (!ac.signal.aborted) {
+              setComparePreviewError("Compare API returned an unexpected response (missing counts).");
+              setCompareDiffPreview(null);
+            }
           }
         } catch (e) {
           if (e instanceof Error && e.name === "AbortError") return;
-          if (!ac.signal.aborted) setCompareDiffPreview(null);
+          if (!ac.signal.aborted) {
+            const msg =
+              e instanceof SyntaxError
+                ? "Could not parse compare response as JSON."
+                : "Could not load compare preview (network error).";
+            setComparePreviewError(msg);
+            setCompareDiffPreview(null);
+          }
         }
       })();
     }, COMPARE_PREVIEW_DEBOUNCE_MS);
@@ -1797,6 +1818,8 @@ export default function CrawlPage() {
     comparePreviewAbortRef.current?.abort();
     comparePreviewAbortRef.current = null;
     setCompareDiffPreview(null);
+    setCompareLoadMoreError(null);
+    setComparePreviewError(null);
     setCompareJobA("");
     setCompareJobB("");
   }
@@ -2330,6 +2353,19 @@ export default function CrawlPage() {
               </select>
             </label>
           </div>
+          {comparePreviewError &&
+          compareJobA &&
+          compareJobB &&
+          compareJobA !== compareJobB &&
+          !compareDiffPreview?.loading ? (
+            <div
+              className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+              role="alert"
+              aria-live="assertive"
+            >
+              {comparePreviewError}
+            </div>
+          ) : null}
           {compareDiffPreview && (compareDiffPreview.loading || compareDiffPreview.counts) ? (
             <div className="mt-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
               {compareDiffPreview.loading ? (
