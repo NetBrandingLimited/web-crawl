@@ -6,6 +6,8 @@ const WORKER_STEPS_CAP = 4000;
 const COMPARE_PREVIEW_DEBOUNCE_MS = 450;
 /** Debounce compare table text search so large loaded diffs are not re-sorted on every keystroke. */
 const COMPARE_TABLE_TEXT_FILTER_DEBOUNCE_MS = 240;
+/** Max concurrent compare row-detail fetches (when many rows expand / export). */
+const COMPARE_ROW_DETAILS_MAX_INFLIGHT = 6;
 /** Page Up/Down moves this many rows while navigating the visible compare table page. */
 const COMPARE_TABLE_PAGE_KEY_ROW_STEP = 12;
 /** Default page size for Phase 2 compare JSON (`paginate=1` on compare API). */
@@ -719,6 +721,9 @@ export default function CrawlPage() {
   const [compareRowDetailsError, setCompareRowDetailsError] = useState<Record<string, string>>({});
   const compareRowDetailsInFlightRef = useRef<Map<string, Promise<CompareRowDetails>>>(new Map());
   const compareRowDetailsCacheRef = useRef(compareRowDetailsCache);
+  const compareRowDetailsActiveCountRef = useRef(0);
+  const compareRowDetailsQueueRef = useRef<Array<() => void>>([]);
+  const compareDetailsJobNonceRef = useRef(0);
   const [urlTableFilter, setUrlTableFilter] = useState("");
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
   const [jobsListLoading, setJobsListLoading] = useState(false);
@@ -1116,6 +1121,7 @@ export default function CrawlPage() {
     setCompareRowDetailsLoading({});
     setCompareRowDetailsError({});
     compareRowDetailsInFlightRef.current.clear();
+    compareDetailsJobNonceRef.current += 1;
     setComparePreviewStaleHint(false);
   }, [compareJobA, compareJobB]);
 
@@ -1245,58 +1251,94 @@ export default function CrawlPage() {
   }, [visibleSortedCompareRows]);
 
   const ensureCompareRowDetails = useCallback(
-    async (urlHash: string): Promise<CompareRowDetails> => {
+    (urlHash: string): Promise<CompareRowDetails> => {
       if (!compareJobA || !compareJobB || compareJobA === compareJobB) {
-        throw new Error("Missing compare jobs for details fetch.");
+        return Promise.reject(new Error("Missing compare jobs for details fetch."));
       }
+
       const cached = compareRowDetailsCacheRef.current[urlHash];
-      if (cached) return cached;
+      if (cached) return Promise.resolve(cached);
+
       const inflight = compareRowDetailsInFlightRef.current.get(urlHash);
       if (inflight) return inflight;
 
-      const p = (async () => {
-        setCompareRowDetailsLoading((prev) => ({ ...prev, [urlHash]: true }));
-        setCompareRowDetailsError((prev) => {
-          if (!prev[urlHash]) return prev;
-          const next = { ...prev };
-          delete next[urlHash];
-          return next;
-        });
+      // Mark as loading immediately (even if queued behind other requests).
+      setCompareRowDetailsLoading((prev) => ({ ...prev, [urlHash]: true }));
+      setCompareRowDetailsError((prev) => {
+        if (!prev[urlHash]) return prev;
+        const next = { ...prev };
+        delete next[urlHash];
+        return next;
+      });
 
-        try {
-          const u = `/api/v1/crawl-jobs/compare/row?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(
-            compareJobB,
-          )}&url_hash=${encodeURIComponent(urlHash)}`;
-          const res = await fetch(u, { cache: "no-store" });
-          if (!res.ok) {
-            const detail = (await res.text().catch(() => "")).trim();
-            throw new Error(`HTTP ${res.status}${detail ? `: ${detail.slice(0, 180)}` : ""}`);
-          }
-          const json = (await res.json()) as { row?: Record<string, unknown> };
-          const row = json.row ?? {};
-          const details = Object.fromEntries(
-            COMPARE_FULL_CSV_HEADERS.map((h) => [h, String((row as Record<string, unknown>)[h] ?? "")]),
-          ) as CompareRowDetails;
+      const requestNonce = compareDetailsJobNonceRef.current;
+      const p = new Promise<CompareRowDetails>((resolve, reject) => {
+        compareRowDetailsQueueRef.current.push(() => {
+          void (async () => {
+            compareRowDetailsActiveCountRef.current += 1;
+            try {
+              // Ignore queued work from an older job pair selection.
+              if (compareDetailsJobNonceRef.current !== requestNonce) {
+                throw new Error("stale_details_request");
+              }
 
-          setCompareRowDetailsCache((prev) => ({ ...prev, [urlHash]: details }));
-          return details;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : "Could not load compare row details.";
-          setCompareRowDetailsError((prev) => ({ ...prev, [urlHash]: msg }));
-          throw e;
-        }
-      })();
+              const u = `/api/v1/crawl-jobs/compare/row?a=${encodeURIComponent(compareJobA)}&b=${encodeURIComponent(
+                compareJobB,
+              )}&url_hash=${encodeURIComponent(urlHash)}`;
+              const res = await fetch(u, { cache: "no-store" });
+              if (!res.ok) {
+                const detail = (await res.text().catch(() => "")).trim();
+                throw new Error(`HTTP ${res.status}${detail ? `: ${detail.slice(0, 180)}` : ""}`);
+              }
+              const json = (await res.json()) as { row?: Record<string, unknown> };
+              const row = json.row ?? {};
+              const details = Object.fromEntries(
+                COMPARE_FULL_CSV_HEADERS.map((h) => [h, String((row as Record<string, unknown>)[h] ?? "")]),
+              ) as CompareRowDetails;
 
-      compareRowDetailsInFlightRef.current.set(urlHash, p);
-      p.finally(() => {
-        compareRowDetailsInFlightRef.current.delete(urlHash);
-        setCompareRowDetailsLoading((prev) => {
-          if (!prev[urlHash]) return prev;
-          const next = { ...prev };
-          delete next[urlHash];
-          return next;
+              setCompareRowDetailsCache((prev) => ({ ...prev, [urlHash]: details }));
+              resolve(details);
+            } catch (e) {
+              if (e instanceof Error && e.message === "stale_details_request") {
+                reject(e);
+                return;
+              }
+              const msg = e instanceof Error ? e.message : "Could not load compare row details.";
+              setCompareRowDetailsError((prev) => ({ ...prev, [urlHash]: msg }));
+              reject(e);
+            } finally {
+              compareRowDetailsActiveCountRef.current -= 1;
+              compareRowDetailsInFlightRef.current.delete(urlHash);
+              setCompareRowDetailsLoading((prev) => {
+                if (!prev[urlHash]) return prev;
+                const next = { ...prev };
+                delete next[urlHash];
+                return next;
+              });
+
+              // Drain queue with remaining capacity.
+              while (
+                compareRowDetailsActiveCountRef.current < COMPARE_ROW_DETAILS_MAX_INFLIGHT &&
+                compareRowDetailsQueueRef.current.length > 0
+              ) {
+                const nextTask = compareRowDetailsQueueRef.current.shift();
+                nextTask?.();
+              }
+            }
+          })();
         });
       });
+
+      compareRowDetailsInFlightRef.current.set(urlHash, p);
+
+      // Start work immediately if we have spare capacity.
+      while (
+        compareRowDetailsActiveCountRef.current < COMPARE_ROW_DETAILS_MAX_INFLIGHT &&
+        compareRowDetailsQueueRef.current.length > 0
+      ) {
+        const nextTask = compareRowDetailsQueueRef.current.shift();
+        nextTask?.();
+      }
 
       return p;
     },
