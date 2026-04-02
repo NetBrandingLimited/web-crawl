@@ -682,6 +682,8 @@ export default function CrawlPage() {
   const applyingCompareFromUrl = useRef(false);
   const applyingCompareFiltersFromUrl = useRef(false);
   const pendingCompareFromUrlRef = useRef<{ a: string; b: string } | null>(null);
+  /** Main compare table row elements by rowKey; used to restore focus after collapsing the expanded panel. */
+  const compareMainRowTrRefs = useRef(new Map<string, HTMLTableRowElement>());
   const [urlTableFilter, setUrlTableFilter] = useState("");
   const [jobDeleteBusy, setJobDeleteBusy] = useState<string | null>(null);
   const [jobsListLoading, setJobsListLoading] = useState(false);
@@ -1295,6 +1297,12 @@ export default function CrawlPage() {
       if (n.has(rowKey)) n.delete(rowKey);
       else n.add(rowKey);
       return n;
+    });
+  }
+
+  function focusCompareMainRowTr(rowKey: string) {
+    queueMicrotask(() => {
+      compareMainRowTrRefs.current.get(rowKey)?.focus({ preventScroll: true });
     });
   }
 
@@ -2836,7 +2844,7 @@ export default function CrawlPage() {
                     className="border-b border-zinc-50 px-3 py-1 text-[11px] text-zinc-500"
                   >
                     Click a row to expand full A vs B field values. Row: Enter or Space toggles, Escape collapses. Tab into the expanded
-                    A/B grid to review values; Escape there collapses too.
+                    A/B grid to review values; Escape there collapses and moves focus back to the row.
                     Differing values are emphasized. Amber-tinted rows have a different{" "}
                     <span className="font-medium">numeric HTTP status</span> in A vs B (other changes alone do not get this tint).
                   </p>
@@ -2956,6 +2964,10 @@ export default function CrawlPage() {
                         return (
                           <Fragment key={`${r.change_kind}:${r.url}:${i}`}>
                             <tr
+                              ref={(el) => {
+                                if (el) compareMainRowTrRefs.current.set(rowKey, el);
+                                else compareMainRowTrRefs.current.delete(rowKey);
+                              }}
                               role="button"
                               tabIndex={0}
                               aria-expanded={open}
@@ -3048,6 +3060,7 @@ export default function CrawlPage() {
                                       e.preventDefault();
                                       e.stopPropagation();
                                       toggleCompareRowExpanded(rowKey);
+                                      focusCompareMainRowTr(rowKey);
                                     }}
                                   >
                                     <div className="border-b border-zinc-200 pb-1 font-semibold text-zinc-600">Field</div>
