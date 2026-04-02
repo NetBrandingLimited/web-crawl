@@ -168,9 +168,9 @@ export async function GET(req: Request) {
       if (ra.httpStatus !== rb.httpStatus) return true;
       // For string fields: if raw values are already strictly equal, skip `trim()` work.
       if (ra.wordCount !== rb.wordCount) return true;
-      if (ra.title !== rb.title && normStr(ra.title) !== normStr(rb.title)) return true;
       // `contentHash` is a strong signal that the page changed; check it earlier to reduce work.
       if (ra.contentHash !== rb.contentHash && normStr(ra.contentHash) !== normStr(rb.contentHash)) return true;
+      if (ra.title !== rb.title && normStr(ra.title) !== normStr(rb.title)) return true;
       if (ra.canonicalUrl !== rb.canonicalUrl && normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl)) return true;
       if (ra.metaDesc !== rb.metaDesc && normStr(ra.metaDesc) !== normStr(rb.metaDesc)) return true;
       if (ra.h1Text !== rb.h1Text && normStr(ra.h1Text) !== normStr(rb.h1Text)) return true;
