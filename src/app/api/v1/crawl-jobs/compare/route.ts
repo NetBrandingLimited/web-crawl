@@ -510,19 +510,40 @@ export async function GET(req: Request) {
     const rb = mapB.get(h);
     if (!rb) continue;
     const statusDiff = ra.httpStatus !== rb.httpStatus;
-    const titleDiff = normStr(ra.title) !== normStr(rb.title);
-    const canDiff = normStr(ra.canonicalUrl) !== normStr(rb.canonicalUrl);
-    const metaDiff = normStr(ra.metaDesc) !== normStr(rb.metaDesc);
+    const titleA = normStr(ra.title);
+    const titleB = normStr(rb.title);
+    const canonicalA = normStr(ra.canonicalUrl);
+    const canonicalB = normStr(rb.canonicalUrl);
+    const metaDescA = normStr(ra.metaDesc);
+    const metaDescB = normStr(rb.metaDesc);
     const wordDiff = ra.wordCount !== rb.wordCount;
-    const h1TextDiff = normStr(ra.h1Text) !== normStr(rb.h1Text);
+    const h1TextA = normStr(ra.h1Text);
+    const h1TextB = normStr(rb.h1Text);
     const h1CountDiff = ra.h1Count !== rb.h1Count;
-    const contentTypeDiff = normStr(ra.contentType) !== normStr(rb.contentType);
-    const robotsDiff = normStr(ra.robotsMeta) !== normStr(rb.robotsMeta);
-    const metaRefreshDiff = normStr(ra.metaRefreshContent) !== normStr(rb.metaRefreshContent);
-    const contentHashDiff = normStr(ra.contentHash) !== normStr(rb.contentHash);
-    const xRobotsDiff = normStr(ra.xRobotsTag) !== normStr(rb.xRobotsTag);
-    const htmlLangDiff = normStr(ra.htmlLang) !== normStr(rb.htmlLang);
+    const contentTypeA = normStr(ra.contentType);
+    const contentTypeB = normStr(rb.contentType);
+    const robotsMetaA = normStr(ra.robotsMeta);
+    const robotsMetaB = normStr(rb.robotsMeta);
+    const metaRefreshA = normStr(ra.metaRefreshContent);
+    const metaRefreshB = normStr(rb.metaRefreshContent);
+    const contentHashA = normStr(ra.contentHash);
+    const contentHashB = normStr(rb.contentHash);
+    const xRobotsTagA = normStr(ra.xRobotsTag);
+    const xRobotsTagB = normStr(rb.xRobotsTag);
+    const htmlLangA = normStr(ra.htmlLang);
+    const htmlLangB = normStr(rb.htmlLang);
     const responseTimeDiff = ra.responseTimeMs !== rb.responseTimeMs;
+
+    const titleDiff = titleA !== titleB;
+    const canDiff = canonicalA !== canonicalB;
+    const metaDiff = metaDescA !== metaDescB;
+    const h1TextDiff = h1TextA !== h1TextB;
+    const contentTypeDiff = contentTypeA !== contentTypeB;
+    const robotsDiff = robotsMetaA !== robotsMetaB;
+    const metaRefreshDiff = metaRefreshA !== metaRefreshB;
+    const contentHashDiff = contentHashA !== contentHashB;
+    const xRobotsDiff = xRobotsTagA !== xRobotsTagB;
+    const htmlLangDiff = htmlLangA !== htmlLangB;
     if (
       !statusDiff &&
       !titleDiff &&
@@ -541,55 +562,59 @@ export async function GET(req: Request) {
     )
       continue;
 
-    const fields: string[] = [];
-    if (statusDiff) fields.push("status");
-    if (titleDiff) fields.push("title");
-    if (canDiff) fields.push("canonical");
-    if (metaDiff) fields.push("meta_description");
-    if (wordDiff) fields.push("word_count");
-    if (h1TextDiff) fields.push("h1_text");
-    if (h1CountDiff) fields.push("h1_count");
-    if (contentTypeDiff) fields.push("content_type");
-    if (robotsDiff) fields.push("robots_meta");
-    if (metaRefreshDiff) fields.push("meta_refresh");
-    if (contentHashDiff) fields.push("content_hash");
-    if (xRobotsDiff) fields.push("x_robots_tag");
-    if (htmlLangDiff) fields.push("html_lang");
-    if (responseTimeDiff) fields.push("response_time_ms");
+    // Build `changed_fields` without allocating an intermediate array.
+    let changed_fields = "";
+    const push = (token: string) => {
+      changed_fields = changed_fields === "" ? token : `${changed_fields}|${token}`;
+    };
+    if (statusDiff) push("status");
+    if (titleDiff) push("title");
+    if (canDiff) push("canonical");
+    if (metaDiff) push("meta_description");
+    if (wordDiff) push("word_count");
+    if (h1TextDiff) push("h1_text");
+    if (h1CountDiff) push("h1_count");
+    if (contentTypeDiff) push("content_type");
+    if (robotsDiff) push("robots_meta");
+    if (metaRefreshDiff) push("meta_refresh");
+    if (contentHashDiff) push("content_hash");
+    if (xRobotsDiff) push("x_robots_tag");
+    if (htmlLangDiff) push("html_lang");
+    if (responseTimeDiff) push("response_time_ms");
 
     rows.push({
       change_kind: "changed",
-      changed_fields: fields.join("|"),
+      changed_fields,
       url_hash: h,
       url: ra.url,
       depth_a: ra.depth,
       depth_b: rb.depth,
       http_status_a: ra.httpStatus ?? "",
       http_status_b: rb.httpStatus ?? "",
-      title_a: normStr(ra.title),
-      title_b: normStr(rb.title),
-      canonical_a: normStr(ra.canonicalUrl),
-      canonical_b: normStr(rb.canonicalUrl),
-      meta_description_a: normStr(ra.metaDesc),
-      meta_description_b: normStr(rb.metaDesc),
+      title_a: titleA,
+      title_b: titleB,
+      canonical_a: canonicalA,
+      canonical_b: canonicalB,
+      meta_description_a: metaDescA,
+      meta_description_b: metaDescB,
       word_count_a: ra.wordCount,
       word_count_b: rb.wordCount,
-      h1_text_a: normStr(ra.h1Text),
-      h1_text_b: normStr(rb.h1Text),
+      h1_text_a: h1TextA,
+      h1_text_b: h1TextB,
       h1_count_a: ra.h1Count,
       h1_count_b: rb.h1Count,
-      content_type_a: normStr(ra.contentType),
-      content_type_b: normStr(rb.contentType),
-      robots_meta_a: normStr(ra.robotsMeta),
-      robots_meta_b: normStr(rb.robotsMeta),
-      meta_refresh_a: normStr(ra.metaRefreshContent),
-      meta_refresh_b: normStr(rb.metaRefreshContent),
-      content_hash_a: normStr(ra.contentHash),
-      content_hash_b: normStr(rb.contentHash),
-      x_robots_tag_a: normStr(ra.xRobotsTag),
-      x_robots_tag_b: normStr(rb.xRobotsTag),
-      html_lang_a: normStr(ra.htmlLang),
-      html_lang_b: normStr(rb.htmlLang),
+      content_type_a: contentTypeA,
+      content_type_b: contentTypeB,
+      robots_meta_a: robotsMetaA,
+      robots_meta_b: robotsMetaB,
+      meta_refresh_a: metaRefreshA,
+      meta_refresh_b: metaRefreshB,
+      content_hash_a: contentHashA,
+      content_hash_b: contentHashB,
+      x_robots_tag_a: xRobotsTagA,
+      x_robots_tag_b: xRobotsTagB,
+      html_lang_a: htmlLangA,
+      html_lang_b: htmlLangB,
       response_time_ms_a: ra.responseTimeMs ?? "",
       response_time_ms_b: rb.responseTimeMs ?? "",
     });
