@@ -190,9 +190,10 @@ export async function GET(req: Request) {
       url: string;
       http_status_a: number | string;
       http_status_b: number | string;
+      i: number; // insertion order for stable tie-breaking
     };
-    type NewInBCand = { url_hash: string; url: string; http_status_b: number | string };
-    type RemovedInACand = { url_hash: string; url: string; http_status_a: number | string };
+    type NewInBCand = { url_hash: string; url: string; http_status_b: number | string; i: number };
+    type RemovedInACand = { url_hash: string; url: string; http_status_a: number | string; i: number };
 
     const changedCands: ChangedCand[] = [];
     const newInBCands: NewInBCand[] = [];
@@ -204,6 +205,7 @@ export async function GET(req: Request) {
           url_hash: h,
           url: rb.url,
           http_status_b: rb.httpStatus ?? "",
+          i: newInBCands.length,
         });
       }
     }
@@ -214,6 +216,7 @@ export async function GET(req: Request) {
           url_hash: h,
           url: ra.url,
           http_status_a: ra.httpStatus ?? "",
+          i: removedInACands.length,
         });
       }
     }
@@ -228,15 +231,9 @@ export async function GET(req: Request) {
         url: ra.url,
         http_status_a: ra.httpStatus ?? "",
         http_status_b: rb.httpStatus ?? "",
+        i: changedCands.length,
       });
     }
-
-    // Keep the same ordering as the previous global sort:
-    // "changed" < "new_in_b" < "removed_in_a", then by `url` ascending.
-    const urlSort = (a: { url: string }, b: { url: string }) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0);
-    changedCands.sort(urlSort);
-    newInBCands.sort(urlSort);
-    removedInACands.sort(urlSort);
 
     const newInB = newInBCands.length;
     const removedInA = removedInACands.length;
@@ -269,61 +266,131 @@ export async function GET(req: Request) {
       );
     }
 
+    const urlThenIAsc = <T extends { url: string; i: number }>(a: T, b: T) => {
+      if (a.url < b.url) return -1;
+      if (a.url > b.url) return 1;
+      // Tie-break by insertion order to reproduce stable `sort` behavior.
+      return a.i - b.i;
+    };
+
+    function selectUrlSlice<T extends { url: string; i: number }>(items: T[], start: number, count: number): T[] {
+      if (count <= 0) return [];
+      const n = items.length;
+      if (start >= n) return [];
+      const endExclusive = Math.min(n, start + count);
+      const heapSize = endExclusive; // keep smallest `heapSize` items
+
+      // Max-heap by key: keeps the largest among the "smallest set".
+      const heap: T[] = [];
+      const isGreater = (a: T, b: T) => urlThenIAsc(a, b) > 0;
+
+      const heapifyUp = (idx: number) => {
+        while (idx > 0) {
+          const parent = (idx - 1) >> 1;
+          if (!isGreater(heap[idx], heap[parent])) break;
+          const tmp = heap[parent];
+          heap[parent] = heap[idx];
+          heap[idx] = tmp;
+          idx = parent;
+        }
+      };
+
+      const heapifyDown = (idx: number) => {
+        const len = heap.length;
+        while (true) {
+          const left = idx * 2 + 1;
+          const right = left + 1;
+          let largest = idx;
+          if (left < len && isGreater(heap[left], heap[largest])) largest = left;
+          if (right < len && isGreater(heap[right], heap[largest])) largest = right;
+          if (largest === idx) break;
+          const tmp = heap[largest];
+          heap[largest] = heap[idx];
+          heap[idx] = tmp;
+          idx = largest;
+        }
+      };
+
+      for (const item of items) {
+        if (heap.length < heapSize) {
+          heap.push(item);
+          heapifyUp(heap.length - 1);
+          continue;
+        }
+        // Keep only the smallest `heapSize` items.
+        if (urlThenIAsc(item, heap[0]) < 0) {
+          heap[0] = item;
+          heapifyDown(0);
+        }
+      }
+
+      heap.sort(urlThenIAsc);
+      return heap.slice(start, endExclusive);
+    }
+
+    const endExclusiveGlobal = Math.min(totalDiffRows, offset + pageLimit);
+
+    // Global ordering: [changed][new_in_b][removed_in_a]
+    const changedStart = offset;
+    const changedEnd = Math.min(changed, endExclusiveGlobal);
+    const newStartGlobal = Math.max(changed, offset);
+    const newEndGlobal = Math.min(changed + newInB, endExclusiveGlobal);
+    const removedStartGlobal = Math.max(changed + newInB, offset);
+    const removedEndGlobal = Math.min(totalDiffRows, endExclusiveGlobal);
+
+    const changedSlice = changedStart < changedEnd ? selectUrlSlice(changedCands, changedStart, changedEnd - changedStart) : [];
+    const newSlice =
+      newStartGlobal < newEndGlobal ? selectUrlSlice(newInBCands, newStartGlobal - changed, newEndGlobal - newStartGlobal) : [];
+    const removedSlice =
+      removedStartGlobal < removedEndGlobal
+        ? selectUrlSlice(removedInACands, removedStartGlobal - (changed + newInB), removedEndGlobal - removedStartGlobal)
+        : [];
+
     const pageRows: PreviewRow[] = [];
 
-    const changedLen = changedCands.length;
-    const newLen = newInBCands.length;
-    const removedLen = removedInACands.length;
+    // Materialize returned rows in global order: changed -> new_in_b -> removed_in_a.
+    for (const cand of changedSlice) {
+      const ra = mapA.get(cand.url_hash);
+      const rb = mapB.get(cand.url_hash);
+      if (!ra || !rb) continue;
+      pageRows.push({
+        change_kind: "changed",
+        changed_fields: changedFieldsTokenList(ra, rb),
+        url_hash: cand.url_hash,
+        url: cand.url,
+        http_status_a: cand.http_status_a,
+        http_status_b: cand.http_status_b,
+        title_a: normStr(ra.title),
+        title_b: normStr(rb.title),
+      });
+    }
 
-    const endExclusive = Math.min(totalDiffRows, offset + pageLimit);
+    for (const cand of newSlice) {
+      const rb = mapB.get(cand.url_hash);
+      pageRows.push({
+        change_kind: "new_in_b",
+        changed_fields: "",
+        url_hash: cand.url_hash,
+        url: cand.url,
+        http_status_a: "",
+        http_status_b: cand.http_status_b,
+        title_a: "",
+        title_b: rb ? normStr(rb.title) : "",
+      });
+    }
 
-    // Global ordering: [changed][new_in_b][removed_in_a], each sorted by `url`.
-    // We only materialize rows whose global index falls inside [offset, endExclusive).
-    for (let globalIdx = offset; globalIdx < endExclusive; globalIdx++) {
-      if (globalIdx < changedLen) {
-        const cand = changedCands[globalIdx];
-        const ra = mapA.get(cand.url_hash);
-        const rb = mapB.get(cand.url_hash);
-        if (!ra || !rb) continue;
-        pageRows.push({
-          change_kind: "changed",
-          changed_fields: changedFieldsTokenList(ra, rb),
-          url_hash: cand.url_hash,
-          url: cand.url,
-          http_status_a: cand.http_status_a,
-          http_status_b: cand.http_status_b,
-          title_a: normStr(ra.title),
-          title_b: normStr(rb.title),
-        });
-      } else if (globalIdx < changedLen + newLen) {
-        const idxWithin = globalIdx - changedLen;
-        const cand = newInBCands[idxWithin];
-        const rb = mapB.get(cand.url_hash);
-        pageRows.push({
-          change_kind: "new_in_b",
-          changed_fields: "",
-          url_hash: cand.url_hash,
-          url: cand.url,
-          http_status_a: "",
-          http_status_b: cand.http_status_b,
-          title_a: "",
-          title_b: rb ? normStr(rb.title) : "",
-        });
-      } else {
-        const idxWithin = globalIdx - (changedLen + newLen);
-        const cand = removedInACands[idxWithin];
-        const ra = mapA.get(cand.url_hash);
-        pageRows.push({
-          change_kind: "removed_in_a",
-          changed_fields: "",
-          url_hash: cand.url_hash,
-          url: cand.url,
-          http_status_a: cand.http_status_a,
-          http_status_b: "",
-          title_a: ra ? normStr(ra.title) : "",
-          title_b: "",
-        });
-      }
+    for (const cand of removedSlice) {
+      const ra = mapA.get(cand.url_hash);
+      pageRows.push({
+        change_kind: "removed_in_a",
+        changed_fields: "",
+        url_hash: cand.url_hash,
+        url: cand.url,
+        http_status_a: cand.http_status_a,
+        http_status_b: "",
+        title_a: ra ? normStr(ra.title) : "",
+        title_b: "",
+      });
     }
 
     const nextOffset = offset + pageRows.length;
