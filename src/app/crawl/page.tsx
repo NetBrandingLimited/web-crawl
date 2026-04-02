@@ -2397,17 +2397,34 @@ export default function CrawlPage() {
 
     useEffect(() => {
       if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
-      if (details || loading) return;
+      if (details || loading || detailsError) return;
       void ensureCompareRowDetails(urlHash).catch(() => {});
-    }, [urlHash, details, loading, compareJobA, compareJobB]);
+    }, [urlHash, details, loading, detailsError, compareJobA, compareJobB]);
 
     // Performance: when a row is expanded, prefetch adjacent rows so Escape/arrow navigation feels instant.
     useEffect(() => {
       if (!compareJobA || !compareJobB || compareJobA === compareJobB) return;
-      const hashes = [prefetchPrevUrlHash, prefetchNextUrlHash].filter(Boolean) as string[];
+      const hashes = [prefetchPrevUrlHash, prefetchNextUrlHash]
+        .filter(Boolean)
+        .filter((h) => {
+          const hash = h as string;
+          const cached = compareRowDetailsCacheRef.current[hash];
+          const inflight = compareRowDetailsInFlightRef.current.has(hash);
+          const isLoading = compareRowDetailsLoading[hash];
+          const err = compareRowDetailsError[hash];
+          return !cached && !inflight && !isLoading && !err;
+        }) as string[];
       if (hashes.length === 0) return;
       void Promise.allSettled(hashes.map((h) => ensureCompareRowDetails(h)));
-    }, [prefetchPrevUrlHash, prefetchNextUrlHash, compareJobA, compareJobB, ensureCompareRowDetails]);
+    }, [
+      prefetchPrevUrlHash,
+      prefetchNextUrlHash,
+      compareJobA,
+      compareJobB,
+      ensureCompareRowDetails,
+      compareRowDetailsLoading,
+      compareRowDetailsError,
+    ]);
 
     return (
       <tr className="bg-zinc-50/80">
