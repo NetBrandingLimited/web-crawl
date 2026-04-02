@@ -194,7 +194,8 @@ export async function GET(req: Request) {
           http_status_a: "",
           http_status_b: rb.httpStatus ?? "",
           title_a: "",
-          title_b: normStr(rb.title),
+          // Defer `trim()` until after we slice the current page.
+          title_b: "",
         });
       }
     }
@@ -208,7 +209,8 @@ export async function GET(req: Request) {
           url: ra.url,
           http_status_a: ra.httpStatus ?? "",
           http_status_b: "",
-          title_a: normStr(ra.title),
+          // Defer `trim()` until after we slice the current page.
+          title_a: "",
           title_b: "",
         });
       }
@@ -228,8 +230,9 @@ export async function GET(req: Request) {
         url: ra.url,
         http_status_a: ra.httpStatus ?? "",
         http_status_b: rb.httpStatus ?? "",
-        title_a: normStr(ra.title),
-        title_b: normStr(rb.title),
+        // Defer `trim()` until after we slice the current page.
+        title_a: "",
+        title_b: "",
       });
     }
 
@@ -292,6 +295,22 @@ export async function GET(req: Request) {
       const rb = mapB.get(pr.url_hash);
       if (!ra || !rb) continue;
       pr.changed_fields = changedFieldsTokenList(ra, rb);
+    }
+
+    // Defer `trim()`-based title fields until after we slice the current page.
+    for (const pr of pageRows) {
+      if (pr.change_kind === "new_in_b") {
+        const rb = mapB.get(pr.url_hash);
+        if (rb) pr.title_b = normStr(rb.title);
+      } else if (pr.change_kind === "removed_in_a") {
+        const ra = mapA.get(pr.url_hash);
+        if (ra) pr.title_a = normStr(ra.title);
+      } else {
+        const ra = mapA.get(pr.url_hash);
+        const rb = mapB.get(pr.url_hash);
+        if (ra) pr.title_a = normStr(ra.title);
+        if (rb) pr.title_b = normStr(rb.title);
+      }
     }
     const nextOffset = offset + pageRows.length;
     const next_cursor = nextOffset < totalDiffRows ? encodeCompareJsonCursor(nextOffset) : null;
